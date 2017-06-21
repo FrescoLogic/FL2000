@@ -1,0 +1,51 @@
+# Makefile
+#
+# (c)Copyright 2014-2014, Fresco Logic, Incorporated.
+#
+# The contents of this file are property of Fresco Logic, Incorporated and are strictly protected
+# by Non Disclosure Agreements. Distribution in any form to unauthorized parties is strictly prohibited.
+#
+# Purpose:
+#
+# NOTE: DO NOT SEND THIS FILE OUTSIDE OF FRESCO LOGIC.
+#
+
+fl2000-y := fl2000_module.o
+fl2000-y += fl2000_bulk.o
+fl2000-y += fl2000_ioctl.o
+fl2000-y += fl2000_render.o
+fl2000-y += fl2000_dev.o
+fl2000-y += fl2000_dongle.o
+fl2000-y += fl2000_big_table.o
+fl2000-y += fl2000_i2c.o
+fl2000-y += fl2000_register.o
+fl2000-y += fl2000_monitor.o
+fl2000-y += fl2000_desc.o
+fl2000-y += fl2000_interrupt.o
+fl2000-y += fl2000_compression.o
+fl2000-y += fl2000_surface.o
+fl2000-y += fl2000_fops.o
+
+ifdef CONFIG_USB_FL2000
+
+obj-$(CONFIG_USB_FL2000) := fl2000.o
+
+else
+
+obj-m := fl2000.o
+
+#KERNEL_PATH = ../../../kernel/linux-3.10.0-327.13.1.el7
+#KERNEL_PATH = /usr/src/kernels/3.10.0-327.13.1.el7.x86_64
+#KERNEL_PATH = /usr/src/kernels/`uname -r`
+KERNEL_PATH = /usr/src/linux-headers-4.4.0-72-generic
+
+all:
+	make -C $(KERNEL_PATH) M=$(PWD) modules
+
+clean:
+	make -C $(KERNEL_PATH) M=$(PWD) clean
+	rm -f Module.symvers
+
+endif
+
+
