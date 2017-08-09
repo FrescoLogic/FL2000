@@ -196,20 +196,28 @@ struct dev_ctx {
 
 	struct registry			registry;
 
+	/*
+	 * flags and counters
+	 */
 	bool				monitor_plugged_in;
 	bool				dev_gone;
 	uint32_t			card_name;
 
+	bool				hdmi_chip_found;
+	bool				hdmi_running_in_dvi_mode;
+	bool				hdmi_powered_up;
+	uint32_t			hdmi_audio_use_spdif;
+
 	struct vr_params		vr_params;
 	struct render			render;
-	uint8_t				monitor_edid[EDID_SIZE];
+	uint8_t				monitor_edid[8][EDID_SIZE];
 
 	/*
 	 * user mode app management
 	 */
 	uint32_t			open_count;
 	wait_queue_head_t		ioctl_wait_q;
-	
+
 	/*
 	 * SURFACE_TYPE_VIRTUAL_CONTIGUOUS/SURFACE_TYPE_PHYSICAL_CONTIGUOUS
 	 * allocation management

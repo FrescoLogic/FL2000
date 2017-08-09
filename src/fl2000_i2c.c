@@ -277,7 +277,7 @@ int fl2000_i2c_write(
 
 		// I2C programming not finish, wait for a while and keep trying.
 		//
-		DELAY_MS( 10 );
+		DELAY_MS(10);
 	}
 
 	if (!i2c_done) {
@@ -286,8 +286,8 @@ int fl2000_i2c_write(
 	}
 
 exit:
-    dbg_msg(TRACE_LEVEL_VERBOSE, DBG_HW, "<<<<");
-    return ret_val;
+	dbg_msg(TRACE_LEVEL_VERBOSE, DBG_HW, "<<<<");
+	return ret_val;
 }
 
 // eof: vid_i2c.c

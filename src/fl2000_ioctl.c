@@ -42,7 +42,7 @@ fl2000_ioctl_wait_monitor_event(struct dev_ctx * dev_ctx, unsigned long arg)
 	 * in the future.
 	 */
 	monitor_info.monitor_type = OUTPUT_TECHNOLOGY_HD15;
-	memcpy(monitor_info.edid, dev_ctx->monitor_edid, EDID_SIZE);
+	memcpy(monitor_info.edid, dev_ctx->monitor_edid[0], EDID_SIZE);
 	if (copy_to_user((void *) arg, &monitor_info, sizeof(monitor_info))) {
 		dbg_msg(TRACE_LEVEL_ERROR, DBG_PNP, "copy_to_user fails?");
 		return -EFAULT;
@@ -68,7 +68,7 @@ fl2000_ioctl_query_monitor_event(struct dev_ctx * dev_ctx, unsigned long arg)
 	 * in the future.
 	 */
 	monitor_info.monitor_type = OUTPUT_TECHNOLOGY_HD15;
-	memcpy(monitor_info.edid, dev_ctx->monitor_edid, EDID_SIZE);
+	memcpy(monitor_info.edid, dev_ctx->monitor_edid[0], EDID_SIZE);
 	if (copy_to_user((void *) arg, &monitor_info, sizeof(monitor_info))) {
 		dbg_msg(TRACE_LEVEL_ERROR, DBG_PNP, "copy_to_user fails?");
 		return -EFAULT;

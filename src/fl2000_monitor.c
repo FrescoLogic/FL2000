@@ -28,7 +28,7 @@ fl2000_monitor_filter_established_timing(struct dev_ctx * dev_ctx)
 	// Bit 6 720x400 @ 88 Hz
 	// Bit 7 720x400 @ 70 Hz
 	//
-	dev_ctx->monitor_edid[35] = 0x21;
+	dev_ctx->monitor_edid[0][35] = 0x21;
 
 	// Check byte 36
 	//
@@ -41,13 +41,13 @@ fl2000_monitor_filter_established_timing(struct dev_ctx * dev_ctx)
 	// Bit 6 800x600   @ 75 Hz
 	// Bit 7 800x600   @ 72 Hz
 	//
-	dev_ctx->monitor_edid[36] = 0x8;
+	dev_ctx->monitor_edid[0][36] = 0x8;
 
 	// Check Byte 37
 	//
 	// Bit 7 for 1152x870@75Hz.
 	//
-	dev_ctx->monitor_edid[37] = 0;
+	dev_ctx->monitor_edid[0][37] = 0;
 }
 
 bool
@@ -127,12 +127,12 @@ void fl2000_monitor_filter_std_timing(struct dev_ctx * dev_ctx)
 	 * Unused fields are filled with 01 01
 	 */
 	for (i = 38; i < 53; i+= 2) {
-		uint8_t	 x = dev_ctx->monitor_edid[i];
-		uint8_t  ratio = dev_ctx->monitor_edid[i + 1] >> 6;
+		uint8_t	 x = dev_ctx->monitor_edid[0][i];
+		uint8_t  ratio = dev_ctx->monitor_edid[0][i + 1] >> 6;
 
-		freq = (dev_ctx->monitor_edid[i + 1] & 0x3F) + 60;
-		if (dev_ctx->monitor_edid[i] == 1 &&
-		    dev_ctx->monitor_edid[i + 1] == 1)
+		freq = (dev_ctx->monitor_edid[0][i + 1] & 0x3F) + 60;
+		if (dev_ctx->monitor_edid[0][i] == 1 &&
+		    dev_ctx->monitor_edid[0][i + 1] == 1)
 			break;
 
 		fl2000_monitor_ratio_to_dimension(
@@ -149,8 +149,8 @@ void fl2000_monitor_filter_std_timing(struct dev_ctx * dev_ctx)
 			/*
 			 * make it a 1024x768
 			 */
-			dev_ctx->monitor_edid[i] = 97;
-			dev_ctx->monitor_edid[i + 1]= IMAGE_ASPECT_RATIO_4_3 << 6;
+			dev_ctx->monitor_edid[0][i] = 97;
+			dev_ctx->monitor_edid[0][i + 1]= IMAGE_ASPECT_RATIO_4_3 << 6;
 		}
 
 	}
@@ -166,7 +166,7 @@ void fl2000_monitor_filter_detailed_timing(struct dev_ctx * dev_ctx)
 	uint32_t i;
 
 	for (i = 54; i < 125; i+= 18) {
-		uint8_t *  entry = &dev_ctx->monitor_edid[i];
+		uint8_t *  entry = &dev_ctx->monitor_edid[0][i];
 
 		/*
 		 * NOT detailed timing descriptor
@@ -256,7 +256,7 @@ bool fl2000_monitor_read_edid_dsub(struct dev_ctx * dev_ctx)
 			goto exit;
 		}
 
-		memcpy(&dev_ctx->monitor_edid[index], &data, 4);
+		memcpy(&dev_ctx->monitor_edid[0][index], &data, 4);
 
 		// Because I2C is slow, we have to delay a while.
 		//
@@ -482,18 +482,50 @@ void fl2000_monitor_read_edid(struct dev_ctx * dev_ctx)
 
 	dbg_msg(TRACE_LEVEL_VERBOSE, DBG_PNP, ">>>>");
 
-	// Try to read EDID from two place:
+	// Try to read EDID from two places:
 	// 1. DSUB EDID
 	// 2. HDMI EDID
 	//
-	edid_ok = fl2000_monitor_read_edid_dsub(dev_ctx);
+	if (dev_ctx->hdmi_chip_found) {
+		unsigned int	i;
+		uint8_t num_ext;
+
+		// read the block 0 first, then determine the number of extensions
+		// at offset 126.
+		edid_ok = fl2000_hdmi_read_block(dev_ctx, 0);
+		if (!edid_ok)
+			goto edid_exit;
+
+		num_ext = dev_ctx->monitor_edid[0][126];
+		dbg_msg(TRACE_LEVEL_INFO, DBG_PNP,
+			"%u EDID extensions found", num_ext);
+
+		// ignore num_ext if greater than 7.
+		if (num_ext > 7)
+			num_ext = 0;
+		for (i = 0; i < num_ext; i++) {
+			bool read_ok;
+
+			read_ok = fl2000_hdmi_read_block(dev_ctx, i + 1);
+			dbg_msg(TRACE_LEVEL_INFO, DBG_PNP,
+				"block[%u] %s", i + 1, read_ok ? "ok" : "failed");
+			if (!read_ok)
+				break;
+		}
+
+	}
+	else {
+		edid_ok = fl2000_monitor_read_edid_dsub(dev_ctx);
+	}
+
+edid_exit:
 	if (!edid_ok) {
 		dbg_msg(TRACE_LEVEL_ERROR, DBG_PNP,
 			"ERROR Read DSUB Edid table failed.");
 
 		// Can't get correct EDID table from I2C
 		//
-		memset(dev_ctx->monitor_edid, 0, EDID_SIZE);
+		memset(dev_ctx->monitor_edid[0], 0, EDID_SIZE);
 		goto exit;
 	}
 
@@ -512,53 +544,49 @@ void fl2000_monitor_read_edid(struct dev_ctx * dev_ctx)
 				//
 				// PrivateParseEdidEstablishedTimingBitmap
 				//
-				dev_ctx->monitor_edid[ 35 ] = 1;
-				dev_ctx->monitor_edid[ 36 ] = 0;
-				dev_ctx->monitor_edid[ 37 ] = 0;
+				dev_ctx->monitor_edid[0][35] = 1;
+				dev_ctx->monitor_edid[0][36] = 0;
+				dev_ctx->monitor_edid[0][37] = 0;
 
 				// PrivateParseEdidStandardTimingInformation
 				//
 				for (index = 38; index < 54; index++)
-					dev_ctx->monitor_edid[ index ] = 0x01;
+					dev_ctx->monitor_edid[0][index] = 0x01;
 
 				// PrivateParseEdidDetailedTimingDescriptors
 				//
-				dev_ctx->monitor_edid[ 54 ] = 0x40;
-				dev_ctx->monitor_edid[ 55 ] = 0x0B;
-
-				dev_ctx->monitor_edid[ 56 ] = 0x20;
-				dev_ctx->monitor_edid[ 57 ] = 0x00;
-				dev_ctx->monitor_edid[ 58 ] = 0x30;
-
-				dev_ctx->monitor_edid[ 59 ] = 0x58;
-				dev_ctx->monitor_edid[ 60 ] = 0x00;
-				dev_ctx->monitor_edid[ 61 ] = 0x20;
+				dev_ctx->monitor_edid[0][54] = 0x40;
+				dev_ctx->monitor_edid[0][55] = 0x0B;
+				dev_ctx->monitor_edid[0][56] = 0x20;
+				dev_ctx->monitor_edid[0][57] = 0x00;
+				dev_ctx->monitor_edid[0][58] = 0x30;
+				dev_ctx->monitor_edid[0][59] = 0x58;
+				dev_ctx->monitor_edid[0][60] = 0x00;
+				dev_ctx->monitor_edid[0][61] = 0x20;
 				break;
 			case EDID_FILTER_USB2_640_480_60HZ:
 				//
 				// PrivateParseEdidEstablishedTimingBitmap
 				//
-				dev_ctx->monitor_edid[ 35 ] = 0x20;
-				dev_ctx->monitor_edid[ 36 ] = 0;
-				dev_ctx->monitor_edid[ 37 ] = 0;
+				dev_ctx->monitor_edid[0][35] = 0x20;
+				dev_ctx->monitor_edid[0][36] = 0;
+				dev_ctx->monitor_edid[0][37] = 0;
 
 				// PrivateParseEdidStandardTimingInformation
 				//
 				for (index = 38; index < 54; index++)
-					dev_ctx->monitor_edid[ index ] = 0x01;
+					dev_ctx->monitor_edid[0][index] = 0x01;
 
 				// PrivateParseEdidDetailedTimingDescriptors
 				//
-				dev_ctx->monitor_edid[ 54 ] = 0x3F;
-				dev_ctx->monitor_edid[ 55 ] = 0x07;
-
-				dev_ctx->monitor_edid[ 56 ] = 0x80;
-				dev_ctx->monitor_edid[ 57 ] = 0x00;
-				dev_ctx->monitor_edid[ 58 ] = 0x20;
-
-				dev_ctx->monitor_edid[ 59 ] = 0xE0;
-				dev_ctx->monitor_edid[ 60 ] = 0x0;
-				dev_ctx->monitor_edid[ 61 ] = 0x10;
+				dev_ctx->monitor_edid[0][54] = 0x3F;
+				dev_ctx->monitor_edid[0][55] = 0x07;
+				dev_ctx->monitor_edid[0][56] = 0x80;
+				dev_ctx->monitor_edid[0][57] = 0x00;
+				dev_ctx->monitor_edid[0][58] = 0x20;
+				dev_ctx->monitor_edid[0][59] = 0xE0;
+				dev_ctx->monitor_edid[0][60] = 0x0;
+				dev_ctx->monitor_edid[0][61] = 0x10;
 				break;
 			default:
 				break;
@@ -568,10 +596,10 @@ void fl2000_monitor_read_edid(struct dev_ctx * dev_ctx)
 
 	check_sum = 0;
 	for (index = 0; index < (EDID_SIZE - 1); index++)
-	    check_sum += dev_ctx->monitor_edid[index];
+	    check_sum += dev_ctx->monitor_edid[0][index];
 
 	check_sum = -check_sum;
-	dev_ctx->monitor_edid[ 127 ] = check_sum;
+	dev_ctx->monitor_edid[0][127] = check_sum;
 
 exit:
     dbg_msg(TRACE_LEVEL_VERBOSE, DBG_PNP, "<<<<");
@@ -580,8 +608,8 @@ exit:
 void
 fl2000_monitor_plugin_handler(
 	struct dev_ctx * dev_ctx,
-	bool IsConnectedExternalMonitor,
-	bool IsConnectedEDID)
+	bool external_connected,
+	bool edid_connected)
 {
 	dbg_msg(TRACE_LEVEL_VERBOSE, DBG_PNP, ">>>>");
 
@@ -608,13 +636,11 @@ fl2000_monitor_plugin_handler(
 	//
 	fl2000_dongle_u1u2_setup(dev_ctx, false);
 
-	RtlZeroMemory( dev_ctx->monitor_edid, EDID_SIZE );
+	memset(dev_ctx->monitor_edid, 0, sizeof(dev_ctx->monitor_edid));
 
-	if (IsConnectedEDID) {
-		// Get EDID table.
-		//
-		fl2000_monitor_read_edid(dev_ctx);
-	}
+	// Get EDID table.
+	//
+	fl2000_monitor_read_edid(dev_ctx);
 
 	dbg_msg(TRACE_LEVEL_INFO, DBG_PNP,
 		"Notify system to add monitor.");
@@ -654,7 +680,7 @@ fl2000_monitor_plugout_handler(
 	 */
 	fl2000_render_stop(dev_ctx);
 
-	memset(dev_ctx->monitor_edid, 0, EDID_SIZE);
+	memset(dev_ctx->monitor_edid, 0, sizeof(dev_ctx->monitor_edid));
 
 	// Bug #6167 : DUT screen black after S4
 	// Because our dongle will compare PLL value for reduce the bootup time.
@@ -698,23 +724,23 @@ fl2000_monitor_vga_status_handler(
 		 * not previously connected
 		 */
 		if (!dev_ctx->monitor_plugged_in) {
-			bool isConnectedExternalMonitor;
-			bool isConnectedEDID;
+			bool external_connected;
+			bool edid_connected;
 
 			if ( vga_status->ext_mon_connected )
-				isConnectedExternalMonitor = true;
+				external_connected = true;
 			else
-				isConnectedExternalMonitor = false;
+				external_connected = false;
 
 			if (vga_status->edid_connected)
-				isConnectedEDID = true;
+				edid_connected = true;
 			else
-				isConnectedEDID = false;
+				edid_connected = false;
 
 			fl2000_monitor_plugin_handler(
 				dev_ctx,
-				isConnectedExternalMonitor,
-				isConnectedEDID);
+				external_connected,
+				edid_connected);
 		}
 		else {
 			dbg_msg(TRACE_LEVEL_WARNING, DBG_PNP,

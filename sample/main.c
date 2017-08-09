@@ -709,6 +709,11 @@ void main(int argc, char* argv[])
 	int fd;
 	int ioctl_ret;
 
+	if (geteuid() != 0) {
+		fprintf(stderr, "need root privilege. try sudo %s\n", argv[0]);
+		return;
+	}
+
 	fd = open(FL2K_NAME, O_RDWR);
 	if (fd == -1) {
 		fprintf(stderr, "fl2000 device not connected?\n");

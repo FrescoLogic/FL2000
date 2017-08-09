@@ -1,6 +1,6 @@
 # Makefile
 #
-# (c)Copyright 2014-2014, Fresco Logic, Incorporated.
+# (c)Copyright 2017, Fresco Logic, Incorporated.
 #
 # The contents of this file are property of Fresco Logic, Incorporated and are strictly protected
 # by Non Disclosure Agreements. Distribution in any form to unauthorized parties is strictly prohibited.
@@ -25,6 +25,7 @@ fl2000-y += fl2000_interrupt.o
 fl2000-y += fl2000_compression.o
 fl2000-y += fl2000_surface.o
 fl2000-y += fl2000_fops.o
+fl2000-y += fl2000_hdmi.o
 
 ifdef CONFIG_USB_FL2000
 
@@ -37,7 +38,7 @@ obj-m := fl2000.o
 #KERNEL_PATH = ../../../kernel/linux-3.10.0-327.13.1.el7
 #KERNEL_PATH = /usr/src/kernels/3.10.0-327.13.1.el7.x86_64
 #KERNEL_PATH = /usr/src/kernels/`uname -r`
-KERNEL_PATH = /usr/src/linux-headers-4.4.0-72-generic
+KERNEL_PATH = /usr/src/linux-headers-4.4.0-75-generic
 
 all:
 	make -C $(KERNEL_PATH) M=$(PWD) modules

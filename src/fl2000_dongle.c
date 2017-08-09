@@ -191,6 +191,9 @@ fl2000_dongle_set_params(struct dev_ctx * dev_ctx, struct vr_params * vr_params)
 	dev_ctx->vr_params.v_sync_time  = entry->v_sync_time;
 	dev_ctx->vr_params.v_back_porch = entry->v_back_porch;
 
+	if (dev_ctx->hdmi_chip_found)
+	    fl2000_hdmi_compliance_tweak(dev_ctx);
+
 	new_pll = entry->bulk_asic_pll;
 
 	if (new_pll != dev_ctx->vr_params.pll_reg) {
@@ -201,7 +204,7 @@ fl2000_dongle_set_params(struct dev_ctx * dev_ctx, struct vr_params * vr_params)
 	ret = fl2000_monitor_set_resolution(dev_ctx, pll_changed);
 	if (!ret) {
 		dbg_msg(TRACE_LEVEL_ERROR, DBG_PNP,
-			"[ERR] fl2000_monitor_set_resolution failed." );
+			"[ERR] fl2000_monitor_set_resolution failed?");
 		ret_val = -EIO;
 		goto exit;
 	}
@@ -211,7 +214,7 @@ fl2000_dongle_set_params(struct dev_ctx * dev_ctx, struct vr_params * vr_params)
 	ret_val = fl2000_dev_select_interface(dev_ctx);
 	if (ret_val < 0) {
 		dbg_msg(TRACE_LEVEL_ERROR, DBG_PNP,
-			"ERROR fl2000_dev_select_interface failed.");
+			"ERROR fl2000_dev_select_interface failed?");
 		goto exit;
 	}
 
@@ -229,6 +232,7 @@ fl2000_set_display_mode(
 {
 	int ret_val = 0;
 	struct vr_params vr_params;
+	bool resolution_changed = false;
 
 	dbg_msg(TRACE_LEVEL_VERBOSE, DBG_PNP, ">>>>");
 
@@ -236,6 +240,10 @@ fl2000_set_display_mode(
 		 "Display information width:%u height:%d.",
 		 display_mode->width,
 		 display_mode->height);
+
+	if ((dev_ctx->vr_params.width != display_mode->width) ||
+	    (dev_ctx->vr_params.height != display_mode->height))
+		resolution_changed = true;
 
 	fl2000_render_stop(dev_ctx);
 	fl2000_dongle_stop(dev_ctx);
@@ -246,7 +254,7 @@ fl2000_set_display_mode(
 	if (display_mode->width == 0 && display_mode->height == 0)
 	    goto exit;
 
-	RtlZeroMemory(&vr_params, sizeof(struct vr_params));
+	memset(&vr_params, 0, sizeof(struct vr_params));
 
 	vr_params.width = display_mode->width;
 	vr_params.height = display_mode->height;
@@ -305,6 +313,9 @@ fl2000_set_display_mode(
 	}
 	fl2000_render_start(dev_ctx);
 
+	if (dev_ctx->hdmi_chip_found)
+		fl2000_hdmi_init(dev_ctx, resolution_changed);
+
 exit:
 	dbg_msg(TRACE_LEVEL_VERBOSE, DBG_PNP, "<<<<");
 	return ret_val;
@@ -312,6 +323,22 @@ exit:
 
 void fl2000_dongle_card_initialize(struct dev_ctx * dev_ctx)
 {
+	bool hdmi_chip_found;
+
+	fl2000_dongle_reset(dev_ctx);
+
+	hdmi_chip_found = fl2000_hdmi_find_chip(dev_ctx);
+	dev_ctx->hdmi_chip_found = hdmi_chip_found;
+	if (hdmi_chip_found) {
+		dbg_msg(TRACE_LEVEL_INFO, DBG_PNP,
+			"found ITE hdmi chip, initializing it.");
+		fl2000_hdmi_reset(dev_ctx);
+		if (!dev_ctx->hdmi_powered_up) {
+			fl2000_hdmi_power_up(dev_ctx);
+		}
+		dbg_msg(TRACE_LEVEL_INFO, DBG_PNP,
+			"ITE hdmi chip powered up");
+	}
 	fl2000_dongle_init_fl2000dx(dev_ctx);
 }
 

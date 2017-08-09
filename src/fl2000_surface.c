@@ -9,6 +9,63 @@
 //
 
 #include "fl2000_include.h"
+#include <linux/version.h>
+
+/*
+ * work-around get_user_pages API changes
+ * for kernel version < 4.6.0
+ * the function is declared as:
+ * long get_user_pages(struct task_struct *tsk, struct mm_struct *mm,
+ *		    unsigned long start, unsigned long nr_pages,
+ *		    int write, int force, struct page **pages,
+ *		    struct vm_area_struct **vmas);
+ *
+ * for kernel version 4.6.0 ~ 4.8.17
+ * the API changes to:
+ * long get_user_pages(unsigned long start, unsigned long nr_pages,
+ *			    int write, int force, struct page **pages,
+ *			    struct vm_area_struct **vmas);
+ *
+ * for kernel version 4.9.0 ~ latest (as of 2017/08/09)
+ * the API changes to:
+ * long get_user_pages(unsigned long start, unsigned long nr_pages,
+ *			    unsigned int gup_flags, struct page **pages,
+ *			    struct vm_area_struct **vmas);
+ */
+long fl2000_get_user_pages(
+	unsigned long start, unsigned long nr_pages,
+ 	struct page **pages, struct vm_area_struct **vmas)
+{
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,6,0)
+	return get_user_pages(
+		current,
+		current->mm,
+		start,
+		nr_pages,
+		0,
+		0,
+		pages,
+		vmas
+		);
+#elif LINUX_VERSION_CODE <= KERNEL_VERSION(4,8,17)
+	return get_user_pages(
+		start,
+		nr_pages,
+		0,
+		0,
+		pages,
+		vmas
+		);
+#else
+	return get_user_pages(
+		start,
+		nr_pages,
+		FOLL_GET | FOLL_TOUCH,
+		pages,
+		vmas
+		);
+#endif
+}
 
 int fl2000_surface_pin_down(
 	struct dev_ctx * dev_ctx,
@@ -53,13 +110,9 @@ int fl2000_surface_pin_down(
 	case SURFACE_TYPE_VIRTUAL_FRAGMENTED_PERSISTENT:
 		while (surface->pages_pinned != nr_pages) {
 			down_read(&current->mm->mmap_sem);
-			pages_pinned = get_user_pages(
-				current,
-				current->mm,
+			pages_pinned = fl2000_get_user_pages(
 				surface->user_buffer,
 				nr_pages,
-				0,	/* read from user buffer */
-				0,
 				pages,
 				NULL);
 			up_read(&current->mm->mmap_sem);
@@ -85,13 +138,9 @@ int fl2000_surface_pin_down(
 		vma = find_vma(current->mm, surface->user_buffer);
 		old_flags = vma->vm_flags;
 		vma->vm_flags &= ~(VM_IO | VM_PFNMAP);
-		pages_pinned = get_user_pages(
-			current,
-			current->mm,
+		pages_pinned = fl2000_get_user_pages(
 			surface->user_buffer,
 			nr_pages,
-			0,	/* read from user buffer */
-			0,
 			pages,
 			NULL);
 		vma->vm_flags = old_flags;
