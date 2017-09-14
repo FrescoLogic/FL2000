@@ -28,6 +28,8 @@ fl2000_i2c_xfer(
 
 	dbg_msg(TRACE_LEVEL_VERBOSE, DBG_HW, ">>>>");
 
+	dev_ctx->ctrl_xfer_buf = *data;
+
 	if (is_read) {
 		bRequest = REQUEST_I2C_COMMAND_READ;
 		req_type = (USB_DIR_IN | USB_TYPE_VENDOR);
@@ -47,9 +49,12 @@ fl2000_i2c_xfer(
 		req_type,
 		0,
 		req_index,
-		data,
+		&dev_ctx->ctrl_xfer_buf,
 		REQUEST_I2C_RW_DATA_COMMAND_LENGTH,
 		CTRL_XFER_TIMEOUT);
+
+	if (is_read)
+		*data = dev_ctx->ctrl_xfer_buf;
 
 	return ret_val;
 }

@@ -230,10 +230,9 @@ fl2000_disconnect(struct usb_interface *ifc)
 
 	kref_put(&dev_ctx->kref, fl2000_module_free);
 
-	dbg_msg(
-		TRACE_LEVEL_INFO, DBG_PNP,
-		"usb_dev ReferenceCount:%d after kref_put.",
-		dev_ctx->kref.refcount.counter);
+	//dbg_msg(TRACE_LEVEL_INFO, DBG_PNP,
+	//	"usb_dev ReferenceCount:%d after kref_put.",
+	//	dev_ctx->kref.refcount.counter);
 
 	dbg_msg(TRACE_LEVEL_VERBOSE, DBG_PNP, "<<<<");
 }

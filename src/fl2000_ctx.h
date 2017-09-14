@@ -168,6 +168,16 @@ struct dev_ctx {
 	struct kref			kref;
 
 	/*
+	 * control transfer scratch area.
+	 * starting from some kernel version, the usb_control_msg no longer
+	 * accept buffer from stack (which is in vmalloc area).
+	 * shame on USB core implementation!
+	 * so we have to allocate our scratch area so that the buffer
+	 * usb core is happy with the buffer
+	 */
+	uint32_t			ctrl_xfer_buf;
+
+	/*
 	 * some compiler (eg. arm-hisiv200-linux-gcc-4.4.1) does not provide
 	 * __sync_xxx_and_fetch. kind of sucks. we use our sync lock here.
 	 */

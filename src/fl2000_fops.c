@@ -89,37 +89,6 @@ int fl2000_release(struct inode * inode, struct file * file)
 	return 0;
 }
 
-static int fl2000_vm_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
-{
-	struct dev_ctx * const dev_ctx = vma->vm_private_data;
-	unsigned long len = vma->vm_end - vma->vm_start;
-	unsigned long num_pages = (len + PAGE_SIZE - 1) >> PAGE_SHIFT;
-	unsigned int i;
-	int ret_val = 0;
-
-	for (i = 0; i < num_pages; i++) {
-		unsigned long usr_addr = vma->vm_start + (i << PAGE_SHIFT);
-		struct page * page = dev_ctx->start_page + i;
-
-		ret_val = vm_insert_pfn(vma, usr_addr, page_to_pfn(page));
-		if (ret_val) {
-			dbg_msg(TRACE_LEVEL_ERROR, DBG_PNP,
-				"vm_insert_pfn(usr_addr 0x%lx), page_count(%u) failed %d",
-				usr_addr, page_count(page), ret_val);
-			goto exit;
-		}
-	}
-
-exit:
-	if (ret_val)
-		return VM_FAULT_ERROR;
-	return VM_FAULT_NOPAGE;
-}
-
-const struct vm_operations_struct fl2000_vma_ops = {
-	.fault = fl2000_vm_fault,
-};
-
 /*
  * this function is triggered from vm_mmap() in fl2000_ioctl_test_alloc_surface.
  * finish the last step of mapping system ram.
@@ -131,9 +100,7 @@ int fl2000_mmap(struct file * file, struct vm_area_struct *vma)
 	unsigned long len = vma->vm_end - vma->vm_start;
 	unsigned long num_pages = (len + PAGE_SIZE - 1) >> PAGE_SHIFT;
 	unsigned int ret_val = 0;
-#if (!USE_VM_INSERT_PFN)
 	unsigned int i;
-#endif
 
 	dbg_msg(TRACE_LEVEL_INFO, DBG_PNP,
 		"vm_start(0x%lx), vm_end(0x%lx), num_pages(0x%lx)",
@@ -151,10 +118,6 @@ int fl2000_mmap(struct file * file, struct vm_area_struct *vma)
 	 * vm_insert_page requires VM_PFNMAP be cleared, and called
 	 * with vma->vm_mm->mmap held.
 	 */
-#if (USE_VM_INSERT_PFN)
-	vma->vm_flags |= VM_IO | VM_PFNMAP | VM_DONTEXPAND | VM_DONTDUMP;
-	vma->vm_ops = &fl2000_vma_ops;
-#else
 	vma->vm_flags |= VM_DONTEXPAND | VM_DONTDUMP;
 	vma->vm_flags &= ~VM_PFNMAP;
 
@@ -171,7 +134,6 @@ int fl2000_mmap(struct file * file, struct vm_area_struct *vma)
 		}
 	}
 
-#endif
 	dbg_msg(TRACE_LEVEL_INFO, DBG_PNP, "vm_flags(0x%lx)", vma->vm_flags);
 	return ret_val;
 }

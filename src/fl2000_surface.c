@@ -179,7 +179,7 @@ int fl2000_surface_pin_down(
 
 release_pages:
 	for (i = 0; i < surface->pages_pinned; i++)
-		page_cache_release(pages[i]);
+		put_page(pages[i]);
 	kfree(pages);
 	surface->pages = NULL;
 	surface->nr_pages = 0;
@@ -201,7 +201,7 @@ void fl2000_surface_unpin(
 		return;
 
 	for (i = 0; i < pages_pinned; i++)
-		page_cache_release(pages[i]);
+		put_page(pages[i]);
 
 	surface->pages = NULL;
 	surface->nr_pages = 0;
