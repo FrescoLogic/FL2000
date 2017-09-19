@@ -171,9 +171,8 @@ struct dev_ctx {
 	 * control transfer scratch area.
 	 * starting from some kernel version, the usb_control_msg no longer
 	 * accept buffer from stack (which is in vmalloc area).
-	 * shame on USB core implementation!
 	 * so we have to allocate our scratch area so that the buffer
-	 * usb core is happy with the buffer
+	 * usb core is happy with the buffer.
 	 */
 	uint32_t			ctrl_xfer_buf;
 
