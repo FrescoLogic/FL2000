@@ -2,9 +2,6 @@
 //
 // (c)Copyright 2017, Fresco Logic, Incorporated.
 //
-// The contents of this file are property of Fresco Logic, Incorporated and are strictly protected
-// by Non Disclosure Agreements. Distribution in any form to unauthorized parties is strictly prohibited.
-//
 // Purpose: Companion File
 //
 
