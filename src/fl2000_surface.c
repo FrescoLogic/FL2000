@@ -160,7 +160,7 @@ int fl2000_surface_pin_down(
 
 	case SURFACE_TYPE_PHYSICAL_CONTIGUOUS:
 		surface->physical_address = surface->user_buffer;
-		first_page = pfn_to_page(__phys_to_pfn(surface->physical_address));
+		first_page = pfn_to_page(PFN_DOWN(__pa(surface->physical_address)));
 		surface->first_page = first_page;
 		for (i = 0; i < nr_pages; i++)
 			pages[i] = first_page + i;
