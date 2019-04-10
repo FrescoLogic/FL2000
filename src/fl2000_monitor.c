@@ -615,10 +615,6 @@ fl2000_monitor_plugin_handler(
 	// Just to prevent the U1U2 step is not synchronize for each plug-in and plug-out.
 	//
 
-	// Monitor Plug-In flag.
-	//
-	dev_ctx->monitor_plugged_in = true;
-
 	// Per NJ's description:
 	// Register 0x78 bit17 is used to control a bug where we did not wake up U1/U2 even
 	// when NRDY has been sent and ERDY is not yet due to OBUF not ready.
@@ -641,6 +637,10 @@ fl2000_monitor_plugin_handler(
 
 	dbg_msg(TRACE_LEVEL_INFO, DBG_PNP,
 		"Notify system to add monitor.");
+
+	// Monitor Plug-In flag.
+	// this flag should only be set after we finished EDID.
+	dev_ctx->monitor_plugged_in = true;
 
 	// wake up a sleeping process.
 	//
