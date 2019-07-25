@@ -7,7 +7,14 @@
 
 #include "fl2000_include.h"
 
-#define	MERGE_ADJACENT_PAGES	0		// there is bug with MERGE_ADJACENT_PAGES. turn if off now
+/*
+ * do not enable MERGE_ADJACENT_PAGES
+ * it turned out that ehci-pci does not accept a scatterlist which describes a
+ * large contiguous buffer (> 30KB ?) when we merge multiple configuous
+ * pages into a scatterlist (MERGE_ADJACENT_PAGES = 1).
+ * When the fl2000 dongle is attached to intel xHC, the issue disappears.
+ */
+#define	MERGE_ADJACENT_PAGES	0
 
 /*
  * this routine is called typically from hard_irq context, as of the latest
@@ -80,7 +87,7 @@ void fl2000_bulk_prepare_urb(
 {
 	struct primary_surface* const surface = render_ctx->primary_surface;
 	struct scatterlist * const sglist = &surface->sglist[0];
-	struct scatterlist * list_entry;
+	struct scatterlist * sg;
 	unsigned int len = surface->xfer_length;
 	unsigned int nr_pages = 0;
 	unsigned int num_sgs = 0;
@@ -89,7 +96,7 @@ void fl2000_bulk_prepare_urb(
 	render_ctx->transfer_buffer = surface->render_buffer;
 	render_ctx->transfer_buffer_length = surface->xfer_length;
 
-	list_entry = &sglist[0];
+	sg = &sglist[0];
 	if (surface->render_buffer == surface->system_buffer &&
 	    surface->type == SURFACE_TYPE_VIRTUAL_FRAGMENTED_PERSISTENT) {
 		nr_pages = surface->nr_pages;
@@ -104,7 +111,7 @@ void fl2000_bulk_prepare_urb(
 		 */
 		sg_init_table(sglist, nr_pages);
 		sg_set_page(
-			list_entry,
+			sg,
 			surface->pages[0],
 			PAGE_SIZE - surface->start_offset,
 			surface->start_offset);
@@ -118,25 +125,25 @@ void fl2000_bulk_prepare_urb(
 			unsigned long prev_pfn = page_to_pfn(prev_pg);
 
 			if (this_pfn != prev_pfn + 1) {
-				list_entry = &sglist[num_sgs];
+				sg = &sglist[num_sgs];
 				num_sgs++;
-				sg_set_page(list_entry, pg, 0, 0);
+				sg_set_page(sg, pg, 0, 0);
 			}
 #else
-			list_entry = &sglist[num_sgs];
+			sg = &sglist[num_sgs];
 			num_sgs++;
-			sg_set_page(list_entry, pg, 0, 0);
+			sg_set_page(sg, pg, 0, 0);
 #endif
 
 			/*
-			 * update list_entry
+			 * update sg
 			 */
 			if (len > PAGE_SIZE) {
-				list_entry->length += PAGE_SIZE;
+				sg->length += PAGE_SIZE;
 				len -= PAGE_SIZE;
 				}
 			else {
-				list_entry->length += len;
+				sg->length += len;
 				dbg_msg(TRACE_LEVEL_INFO, DBG_RENDER,
 					"sglist[%u], len = 0x%x",
 					num_sgs - 1, len);
@@ -148,7 +155,7 @@ void fl2000_bulk_prepare_urb(
 		  surface->type == SURFACE_TYPE_PHYSICAL_CONTIGUOUS)) {
 		sg_init_table(sglist, 1);
 		sg_set_page(
-			list_entry,
+			sg,
 			surface->first_page,
 			len - surface->start_offset,
 			surface->start_offset);
@@ -179,7 +186,7 @@ void fl2000_bulk_prepare_urb(
 
 		sg_init_table(sglist, nr_pages);
 		sg_set_page(
-			&sglist[0],
+			sg,
 			vmalloc_to_page(buf),
 			PAGE_SIZE - start_offset,
 			start_offset);
@@ -195,37 +202,39 @@ void fl2000_bulk_prepare_urb(
 			unsigned long this_pfn = page_to_pfn(pg);
 			unsigned long prev_pfn = page_to_pfn(prev_pg);
 
+			//dbg_msg(TRACE_LEVEL_INFO, DBG_RENDER,
+			//	"this_pfn(%lx)/prev_pfn(%lx)", this_pfn, prev_pfn);
+
 			if (this_pfn != prev_pfn + 1) {
-				list_entry = &sglist[num_sgs];
+				sg = &sglist[num_sgs];
 				num_sgs++;
-				sg_set_page(list_entry, pg, 0, 0);
+				sg_set_page(sg, pg, 0, 0);
 			}
 #else
-			list_entry = &sglist[num_sgs];
+			sg = &sglist[num_sgs];
 			num_sgs++;
-			sg_set_page(list_entry, pg, 0, 0);
+			sg_set_page(sg, pg, 0, 0);
 #endif
 
 			/*
-			 * update list_entry
+			 * update sg
 			 */
 			if (len > PAGE_SIZE) {
-				list_entry->length += PAGE_SIZE;
+				sg->length += PAGE_SIZE;
 				len -= PAGE_SIZE;
 				prev_buf = buf;
 				buf += PAGE_SIZE;
 				}
 			else {
-				list_entry->length += len;
+				sg->length += len;
 				prev_buf = buf;
 				buf += len;
-				dbg_msg(TRACE_LEVEL_INFO, DBG_RENDER,
-					"sglist[%u], len = 0x%x",
-					num_sgs - 1, len);
 			}
+			//dbg_msg(TRACE_LEVEL_INFO, DBG_RENDER,
+			//	"sg[%u]->length(0x%x)", num_sgs - 1, sg->length);
 		}
 	}
-	sg_mark_end(list_entry);
+	sg_mark_end(sg);
 
 	dbg_msg(TRACE_LEVEL_INFO, DBG_RENDER,
 		"num_sgs(%u)", num_sgs);
