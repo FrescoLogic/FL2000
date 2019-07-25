@@ -14,6 +14,7 @@
 #include "../include/fl2000_ioctl.h"
 
 #define	FL2K_NAME	"/dev/fl2000-0"
+
 /*
  * definitions
  */
@@ -24,6 +25,8 @@
 
 #define MAX_FRAME_BUFFER_SIZE			1920*1080*3
 #define	NUM_FRAME_BUFFERS			16
+
+#define	USE_COMPRESSION				1
 
 /*
  * data structures
@@ -416,6 +419,7 @@ void test_display(int fd, uint32_t width, uint32_t height, uint32_t index)
 	display_mode.refresh_rate = 60;
 	display_mode.input_color_format = COLOR_FORMAT_RGB_24;
 	display_mode.output_color_format = COLOR_FORMAT_RGB_24;
+	display_mode.use_compression = USE_COMPRESSION;
 
 	ret_val = ioctl(fd, IOCTL_FL2000_SET_DISPLAY_MODE, &display_mode);
 	if (ret_val < 0) {
@@ -534,6 +538,7 @@ void test_display_on_resolution(int fd, uint32_t width, uint32_t height)
 	display_mode.refresh_rate = 60;
 	display_mode.input_color_format = COLOR_FORMAT_RGB_24;
 	display_mode.output_color_format = COLOR_FORMAT_RGB_24;
+	display_mode.use_compression = USE_COMPRESSION;
 
 	ret_val = ioctl(fd, IOCTL_FL2000_SET_DISPLAY_MODE, &display_mode);
 	if (ret_val < 0) {

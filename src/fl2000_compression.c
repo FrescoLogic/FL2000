@@ -310,7 +310,6 @@ void fl2000_comp_padding_alignment(
 
 size_t fl2000_comp_gravity_low(
 	struct dev_ctx * dev_ctx,
-	struct render_ctx * render_ctx,		// NOT USED
 	size_t data_buffer_length,
 	uint8_t * source,
 	uint8_t * target,
@@ -525,249 +524,6 @@ size_t fl2000_comp_gravity_low(
 	return (data_buffer_length);
 }
 
-__inline
-void fl2000_comp_save_repeated_data2(
-	uint8_t * target,
-	uint8_t * source)
-{
-	uint8_t r, g, b;
-
-	// Optimized function to process pixel fromat transform and compression
-	// together.
-	//
-	r = source[2] >> 3;
-	g = source[1] >> 3;
-	b = source[0] >> 3;
-
-	target[1] = 0x80 | (r << 2) | (g >> 3);
-	target[0] = ((g & 0x07) << 5 ) | b;
-}
-
-__inline void
-fl2000_comp_save_repeated_count2(
-	uint8_t ** target_ptr,
-	uint8_t *  repeat_data,
-	uint32_t   bytes_per_pixel,
-	uint32_t   repeat_count)
-{
-	uint32_t repeat_chunk_size;
-	uint8_t r, g, b;
-	uint8_t * target = *target_ptr;
-
-	do  {
-		if (repeat_count > 0x7FFF)
-			repeat_chunk_size = 0x7FFF;
-		else
-			repeat_chunk_size = repeat_count;
-
-		target[0] = (uint8_t)(repeat_chunk_size);
-		target[1] = (uint8_t)((repeat_chunk_size & 0x7FFF) >> 8);
-		target += PIXEL_BYTE_2;
-		repeat_count -= repeat_chunk_size;
-
-		if (repeat_count > 0) {
-			r = repeat_data[2] >> 3;
-			g = repeat_data[1] >> 3;
-			b = repeat_data[0] >> 3;
-
-			target[1] = 0x80 | (r << 2) | (g >> 3);
-			target[0] = ((g & 0x07) << 5) | b;
-			target += PIXEL_BYTE_2;
-
-			repeat_count -= 1;
-		}
-	} while ( repeat_count > 1 );
-}
-
-size_t
-fl2000_comp_gravity_low2(
-	struct dev_ctx * dev_ctx,
-	struct render_ctx * render_ctx,
-	size_t data_buffer_length,
-	uint8_t * source,
-	uint32_t SourcePixelBytes,
-	uint8_t * target,
-	uint32_t TargetPixelBytes,
-	uint32_t num_of_pixels,
-	bool NoCompressionToFirst1K)
-{
-	uint32_t i;
-	uint32_t looselyColorMaskRGB;
-	uint32_t repeatCount;
-	uint32_t markPixel;
-	uint32_t currentPixel;
-	uint32_t previousPixel;
-	uint8_t * repeatDataPointer;
-	uint8_t * targetOriginalPointer;
-	uint8_t * sourceOriginalPointer;
-	uint32_t currentPixelWithMask;
-	uint32_t markPixelWithMask;
-	uint8_t * sourceBoundary;
-
-	dbg_msg(TRACE_LEVEL_VERBOSE, DBG_COMPRESSION, ">>>>");
-
-	ASSERT(SourcePixelBytes == PIXEL_BYTE_3 &&
-	       TargetPixelBytes == PIXEL_BYTE_2);
-
-	targetOriginalPointer = target;
-	sourceOriginalPointer = source;
-	repeatDataPointer = source;
-
-	markPixel = 0;
-	previousPixel = 0;
-	repeatCount = 0;
-
-	looselyColorMaskRGB = fl2000_comp_get_current_mask_value(dev_ctx);
-
-	// source only care about RGB555.
-	//
-	looselyColorMaskRGB |= 0x00070707;
-
-	sourceBoundary = source + data_buffer_length;
-
-	for ( i = 0; i < num_of_pixels; i++ ) {
-		currentPixel = fl2000_comp_get_pixel(source, SourcePixelBytes);
-		currentPixelWithMask = (currentPixel | looselyColorMaskRGB);
-		markPixelWithMask = (markPixel | looselyColorMaskRGB);
-		if (repeatCount > 0) {
-			// It's loosely comparsion, if current pixel after the
-			// mask that looks like repeatDataPointer pixel, then we
-			// treat it as the same group of current compression
-			// run.
-			//
-			if (currentPixelWithMask == markPixelWithMask) {
-				bool notExactlyTheSameAsMarkPixel;
-				bool exactlyTheSameAsPreviousPixel;
-
-				if (markPixel != currentPixel)
-					notExactlyTheSameAsMarkPixel = true;
-				else
-					notExactlyTheSameAsMarkPixel = false;
-
-				previousPixel = fl2000_comp_get_pixel(
-					source - SourcePixelBytes, SourcePixelBytes);
-
-				if (previousPixel == currentPixel)
-					exactlyTheSameAsPreviousPixel = true;
-				else
-					exactlyTheSameAsPreviousPixel = false;
-
-				// This algorithem check two condtions to prevent worse
-				// color trailing issue.
-				// If we match these two conditions, we have to start a
-				// new compression run.
-				//
-				// 1. Current pixel is *not the same* as repeatDataPointer
-				//    pixel.
-				// 2. Current pixel is *the same* as previous pixel.
-				//
-				if (notExactlyTheSameAsMarkPixel &&
-				    exactlyTheSameAsPreviousPixel) {
-					// Start over a new compression run.
-					//
-					if (repeatCount > 1) {
-						// A real compression run.
-						// And we send device the number of
-						// additional copies - not the length
-						//
-						repeatCount--;
-						fl2000_comp_save_repeated_count2(
-							&target,
-							repeatDataPointer,
-							TargetPixelBytes,
-							repeatCount);
-					}
-					repeatCount = 0;
-				}
-				else if (source >= sourceBoundary) {
-					// USE_COMPRESSION_SKIP_FIRSTPIXEL_WORKAROUND
-					// will hit the case.
-					//
-					if (repeatCount > 1) {
-						repeatCount--;
-						fl2000_comp_save_repeated_count2(
-							&target,
-							repeatDataPointer,
-							TargetPixelBytes,
-							repeatCount);
-					}
-					repeatCount = 0;
-				}
-				else {
-					// After the mask, this pixel is same as
-					// previous one.
-					//
-					repeatCount++;
-					source += SourcePixelBytes;
-				}
-			}
-			else  {
-			// Start over a new compression run.
-			//
-				if (repeatCount > 1) {
-					// A real compression run.
-					// And we send device the number of additional
-					// copies - not the length
-					//
-					repeatCount--;
-					fl2000_comp_save_repeated_count2(
-						&target,
-						repeatDataPointer,
-						TargetPixelBytes,
-						repeatCount);
-				}
-				repeatCount = 0;
-			}
-		}
-
-		if (repeatCount == 0) {
-			fl2000_comp_save_repeated_data2(target, source);
-
-			markPixel = fl2000_comp_get_pixel(
-				source, SourcePixelBytes);
-			repeatDataPointer = source;
-
-			target += TargetPixelBytes;
-			source += SourcePixelBytes;
-
-			repeatCount++;
-		}
-	}
-
-	// When we exit, we could be in the middle of a run. If so we need to do a special termination.
-	//
-	if (repeatCount > 1) {
-		// A real compression run.
-		// And we send device the number of additional copies - not the length
-		//
-		repeatCount--;
-
-		if (repeatCount > 1)
-			fl2000_comp_save_repeated_count2(
-				&target,
-				repeatDataPointer,
-				TargetPixelBytes,
-				repeatCount - 1);
-
-		// Hardware bug: The end of compressed data must be single pixel.
-		//
-		fl2000_comp_save_repeated_data2( target, repeatDataPointer );
-		target += TargetPixelBytes;
-	}
-
-	data_buffer_length = (target - targetOriginalPointer);
-
-	// Make sure compressed data buffer length is aligned.
-	//
-	fl2000_comp_padding_alignment(dev_ctx, target, &data_buffer_length);
-
-	// target is invalid here.
-	//
-	dbg_msg(TRACE_LEVEL_VERBOSE, DBG_COMPRESSION, "<<<<");
-
-	return (data_buffer_length);
-}
-
 size_t
 fl2000_comp_decompress_low(
 	struct dev_ctx * dev_ctx,
@@ -841,7 +597,6 @@ fl2000_comp_decompress_low(
 size_t
 fl2000_compression_gravity(
 	struct dev_ctx * dev_ctx,
-	struct render_ctx * render_ctx,
 	size_t data_buffer_length,
 	uint8_t * source,
 	uint8_t * target,
@@ -864,7 +619,6 @@ fl2000_compression_gravity(
 
 	compressed_length = fl2000_comp_gravity_low(
 		dev_ctx,
-		render_ctx,
 		data_buffer_length,
 		source,
 		target,
@@ -881,31 +635,67 @@ fl2000_compression_gravity(
 	return (compressed_length);
 }
 
+/*
+ * the term gravity2 means output pixel size is 2 bytes
+ */
 size_t
 fl2000_compression_gravity2(
 	struct dev_ctx * dev_ctx,
-	struct render_ctx * render_ctx,
 	size_t data_buffer_length,
 	uint8_t * source,
 	uint8_t * target,
+	uint8_t * working_buffer,
 	uint32_t num_of_pixels)
 {
-	size_t compressed_length;
+	size_t	compressed_length;
 
-
-	// Optimized function to process pixel format transform and compression together.
-	//
-	compressed_length = fl2000_comp_gravity_low2(
-		dev_ctx,
-		render_ctx,
-		data_buffer_length,
+	/*
+	 * FIXME: we always assumed the input color format is 24bpp.
+	 * should check the input color format in the future.
+	 * do in-place 24bpp to 16bpp conversion
+	 */
+	fl2000_compression_convert_3_to_2(
+		working_buffer,
 		source,
-		PIXEL_BYTE_3,
-		target,
-		PIXEL_BYTE_2,
 		num_of_pixels,
-		false);
+		dev_ctx->vr_params.color_mode_16bit);
 
+recompress:
+	compressed_length = fl2000_comp_gravity_low(
+		dev_ctx,
+		num_of_pixels * 2,	// data_buffer_length,
+		working_buffer,		// source,
+		target,
+		num_of_pixels,
+		2,	// 2 bytes per pixel
+		true);
+
+	dbg_msg(TRACE_LEVEL_INFO, DBG_COMPRESSION,
+		"compressed_length(0x%x)", (uint32_t) compressed_length);
+
+	/*
+	 * if the compressed buffer size is too large, lower the compression mask
+	 * and re-compress again
+	 */
+	if (IS_DEVICE_USB2LINK(dev_ctx) &&
+	    dev_ctx->vr_params.dynamic_compression_mask) {
+		if (compressed_length < dev_ctx->vr_params.compression_low_water_mark) {
+			if (dev_ctx->vr_params.compression_mask_index >
+			    dev_ctx->vr_params.compression_mask_index_min)
+			{
+				fl2000_comp_raise_mask(dev_ctx);
+				goto recompress;
+			}
+		}
+		else if (compressed_length > dev_ctx->vr_params.compression_high_water_mark) {
+			if (dev_ctx->vr_params.compression_mask_index <
+			    dev_ctx->vr_params.compression_mask_index_max)
+			{
+				fl2000_comp_lower_mask(dev_ctx);
+				goto recompress;
+			}
+		}
+	}
 	return (compressed_length);
 }
 
@@ -931,6 +721,40 @@ fl2000_comp_decompress_and_check(
 
 	return (decompressed_buf_len);
 }
+
+void
+fl2000_compression_convert_3_to_2(
+	uint8_t * target,
+	uint8_t * source,
+	size_t num_of_pixels,
+	uint32_t color_mode)
+{
+	size_t index;
+	uint8_t r, g, b;
+
+	for (index = 0; index < num_of_pixels; index += 1) {
+		if (color_mode == VR_16_BIT_COLOR_MODE_565) {
+			r = source[2] >> 3;
+			g = source[1] >> 2;
+			b = source[0] >> 3;
+
+			target[1] = (r << 3) | (g >> 3);
+			target[0] = ((g & 0x07) << 5) | b;
+		}
+		else {
+			r = source[2] >> 3;
+			g = source[1] >> 3;
+			b = source[0] >> 3;
+
+			target[1] = (r << 2) | (g >> 3);
+			target[0] = ((g & 0x07) << 5) | b;
+		}
+
+		source += 3;
+		target += 2;
+	}
+}
+
 
 // eof: fl2000_compression.c
 //

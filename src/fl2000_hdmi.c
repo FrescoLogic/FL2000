@@ -990,7 +990,7 @@ fl2000_hdmi_power_up(struct dev_ctx * dev_ctx)
 {
         bool is_good = true;
         int index;
-        const HDMI_REGISTER_SET_ENTRY const table[] =
+        const HDMI_REGISTER_SET_ENTRY table[] =
         {
                 {0x0F, 0x78, 0x38},   // PwrOn GRCLK
                 {0x05, 0x01, 0x00},   // PwrOn PCLK

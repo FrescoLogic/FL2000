@@ -31,7 +31,7 @@
  */
 long fl2000_get_user_pages(
 	unsigned long start, unsigned long nr_pages,
- 	struct page **pages, struct vm_area_struct **vmas)
+	struct page **pages, struct vm_area_struct **vmas)
 {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,6,0)
 	return get_user_pages(
@@ -86,7 +86,7 @@ int fl2000_surface_pin_down(
 	end = surface->user_buffer + surface->buffer_length;
 	nr_pages = (end - start + PAGE_SIZE - 1) >> PAGE_SHIFT;
 
-	pages = kmalloc(nr_pages * sizeof(struct page *), GFP_KERNEL);
+	pages = vzalloc(nr_pages * sizeof(struct page *));
 	if (pages == NULL) {
 		dbg_msg(TRACE_LEVEL_ERROR, DBG_PNP, "no pages allocated?");
 		ret_val = -ENOMEM;
@@ -177,7 +177,7 @@ int fl2000_surface_pin_down(
 release_pages:
 	for (i = 0; i < surface->pages_pinned; i++)
 		put_page(pages[i]);
-	kfree(pages);
+	vfree(pages);
 	surface->pages = NULL;
 	surface->nr_pages = 0;
 	surface->pages_pinned = 0;
@@ -203,7 +203,7 @@ void fl2000_surface_unpin(
 	surface->pages = NULL;
 	surface->nr_pages = 0;
 	surface->pages_pinned = 0;
-	kfree(pages);
+	vfree(pages);
 }
 
 int fl2000_surface_map(
@@ -306,7 +306,7 @@ int fl2000_surface_create(
 		if (info->pitch != info->width * 2) {
 			dbg_msg(TRACE_LEVEL_ERROR, DBG_PNP,
 				"pitch(%d) should be %d?",
-				info->pitch, info->width * 3);
+				info->pitch, info->width * 2);
 			ret = -EINVAL;
 			goto exit;
 		}
@@ -340,7 +340,7 @@ int fl2000_surface_create(
 		goto exit;
 	}
 
-	surface = kzalloc(sizeof(*surface), GFP_KERNEL);
+	surface = vzalloc(sizeof(*surface));
 	if (surface == NULL) {
 		dbg_msg(TRACE_LEVEL_ERROR, DBG_PNP, "no surface allocated?");
 		ret = -ENOMEM;
@@ -351,6 +351,7 @@ int fl2000_surface_create(
 	surface->handle		= info->handle;
 	surface->user_buffer	= info->user_buffer;
 	surface->buffer_length	= (uint32_t) info->buffer_length;
+	surface->xfer_length	= surface->buffer_length;	// set xfer_length = buffer_length
 	surface->width		= info->width;
 	surface->height		= info->height;
 	surface->pitch		= info->pitch;
@@ -361,10 +362,10 @@ int fl2000_surface_create(
 	/*
 	 * always create shadow buffer no matter no matter the type is.
 	 */
-	surface->shadow_buffer = vmalloc(surface->buffer_length);
+	surface->shadow_buffer = vzalloc(surface->buffer_length);
 	if (surface->shadow_buffer == NULL) {
-		dbg_msg(TRACE_LEVEL_ERROR, DBG_PNP, "vmalloc failed?");
-		kfree(surface);
+		dbg_msg(TRACE_LEVEL_ERROR, DBG_PNP, "vzalloc failed?");
+		vfree(surface);
 		goto exit;
 	}
 
@@ -377,7 +378,7 @@ int fl2000_surface_create(
 				dbg_msg(TRACE_LEVEL_ERROR, DBG_PNP,
 					"fl2000_surface_pin_down(%x) failed?",
 					(unsigned int) surface->handle);
-				kfree(surface);
+				vfree(surface);
 				goto exit;
 			}
 
@@ -387,7 +388,7 @@ int fl2000_surface_create(
 					"fl2000_surface_map(%x) failed?",
 					(unsigned int) surface->handle);
 				fl2000_surface_unpin(dev_ctx, surface);
-				kfree(surface);
+				vfree(surface);
 				goto exit;
 			}
 
@@ -412,7 +413,7 @@ int fl2000_surface_create(
 			dbg_msg(TRACE_LEVEL_ERROR, DBG_PNP,
 				"fl2000_surface_pin_down(%x) failed?",
 				(unsigned int) surface->handle);
-			kfree(surface);
+			vfree(surface);
 			goto exit;
 		}
 
@@ -422,7 +423,7 @@ int fl2000_surface_create(
 				"fl2000_surface_map(%x) failed?",
 				(unsigned int) surface->handle);
 			fl2000_surface_unpin(dev_ctx, surface);
-			kfree(surface);
+			vfree(surface);
 			goto exit;
 		}
 
@@ -489,7 +490,7 @@ void fl2000_surface_destroy(
 		surface->shadow_buffer = NULL;
 	}
 
-	kfree(surface);
+	vfree(surface);
 }
 
 void fl2000_surface_destroy_all(struct dev_ctx * dev_ctx)

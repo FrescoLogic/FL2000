@@ -100,8 +100,7 @@ fl2000_render_with_busy_list_lock(
 		spin_lock_irqsave(&dev_ctx->count_lock, flags);
 		render_ctx->pending_count++;
 		spin_unlock_irqrestore(&dev_ctx->count_lock, flags);
-		ret_val = usb_submit_urb(
-			render_ctx->zero_length_urb, GFP_ATOMIC);
+		ret_val = usb_submit_urb(render_ctx->zero_length_urb, GFP_ATOMIC);
 		if (ret_val != 0) {
 			dbg_msg(TRACE_LEVEL_ERROR, DBG_PNP,
 				"[ERR] zero_length_urb submit fails with %d.",
@@ -181,7 +180,7 @@ fl2000_render_ctx_destroy(
     )
 {
 	struct render_ctx * render_ctx;
-	uint32_t 	i;
+	uint32_t	i;
 	unsigned long flags;
 
 	for (i = 0; i < NUM_OF_RENDER_CTX; i++) {
@@ -324,7 +323,7 @@ void fl2000_render_completion_tasklet(unsigned long data)
  */
 void
 fl2000_primary_surface_update(
-	struct dev_ctx * 	dev_ctx,
+	struct dev_ctx *	dev_ctx,
 	struct primary_surface* surface)
 {
 	struct list_head* const	free_list_head = &dev_ctx->render.free_list;
@@ -412,7 +411,7 @@ fl2000_schedule_next_render(struct dev_ctx * dev_ctx)
 	struct list_head	staging_list;
 	struct render_ctx *	render_ctx = NULL;
 	uint32_t		ready_count = 0;
-	unsigned long 		flags;
+	unsigned long		flags;
 	int			ret_val;
 
 	if (dev_ctx->render.green_light == 0) {

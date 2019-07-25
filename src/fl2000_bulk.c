@@ -7,7 +7,7 @@
 
 #include "fl2000_include.h"
 
-#define	MERGE_ADJACENT_PAGES	1
+#define	MERGE_ADJACENT_PAGES	0		// there is bug with MERGE_ADJACENT_PAGES. turn if off now
 
 /*
  * this routine is called typically from hard_irq context, as of the latest
@@ -81,13 +81,13 @@ void fl2000_bulk_prepare_urb(
 	struct primary_surface* const surface = render_ctx->primary_surface;
 	struct scatterlist * const sglist = &surface->sglist[0];
 	struct scatterlist * list_entry;
-	unsigned int len = surface->buffer_length;
+	unsigned int len = surface->xfer_length;
 	unsigned int nr_pages = 0;
 	unsigned int num_sgs = 0;
 	unsigned int i;
 
 	render_ctx->transfer_buffer = surface->render_buffer;
-	render_ctx->transfer_buffer_length = surface->buffer_length;
+	render_ctx->transfer_buffer_length = surface->xfer_length;
 
 	list_entry = &sglist[0];
 	if (surface->render_buffer == surface->system_buffer &&
@@ -144,7 +144,7 @@ void fl2000_bulk_prepare_urb(
 		}
 	}
 	else if (surface->render_buffer == surface->system_buffer &&
-	         (surface->type == SURFACE_TYPE_VIRTUAL_CONTIGUOUS ||
+		 (surface->type == SURFACE_TYPE_VIRTUAL_CONTIGUOUS ||
 		  surface->type == SURFACE_TYPE_PHYSICAL_CONTIGUOUS)) {
 		sg_init_table(sglist, 1);
 		sg_set_page(
@@ -169,7 +169,7 @@ void fl2000_bulk_prepare_urb(
 		uint8_t * prev_buf;
 
 		start = (unsigned long) buf & PAGE_MASK;
-		end = (unsigned long) (buf + surface->buffer_length);
+		end = (unsigned long) (buf + surface->xfer_length);
 		start_offset = ((unsigned long) buf) & ~PAGE_MASK;
 		nr_pages = (end - start + PAGE_SIZE - 1) >> PAGE_SHIFT;
 

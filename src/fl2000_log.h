@@ -32,7 +32,7 @@
 #define DBG_HW                                  (1 << 7)
 #define DBG_COMPRESSION                         (1 << 8)
 
-#define	DEFAULT_DBG_FLAGS	(DBG_INIT | DBG_PNP | DBG_POWER | DBG_IOCTL)
+#define	DEFAULT_DBG_FLAGS	(DBG_INIT | DBG_PNP | DBG_POWER | DBG_IOCTL | DBG_COMPRESSION)
 
 #define dbg_msg(level, flags, msg, ...)		\
 	do {                                            \

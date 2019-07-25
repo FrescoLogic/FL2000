@@ -21,33 +21,33 @@ struct render_ctx;
 
 struct resolution_entry
 {
-	uint32_t 	width;
-	uint32_t 	height;
-	uint32_t 	freq;
-	uint32_t 	h_total_time;
-	uint32_t 	h_sync_time;
-	uint32_t 	h_back_porch;
-	uint32_t 	v_total_time;
-	uint32_t 	v_sync_time;
-	uint32_t 	v_back_porch;
-	uint32_t 	isoch_num_of_pkt;
-	uint32_t 	isoch_td_size_in_kb;
-	uint32_t 	isoch_zero_bytes;
-	uint32_t 	itp_per_frame;
-	uint32_t 	num_of_idle;
-	uint32_t 	td_size;
-	uint32_t 	h_sync_reg_1;
-	uint32_t 	h_sync_reg_2;
-	uint32_t 	v_sync_reg_1;
-	uint32_t 	v_sync_reg_2;
-	uint32_t 	iso_reg;
-	uint32_t 	bulk_fpga_pll;
-	uint32_t 	bulk_asic_pll;
-	uint32_t 	isoch_fpga_pll;
-	uint32_t 	isoch_asic_pll;
-	uint32_t 	isoch_fpga_h_sync_reg_1;
-	uint32_t 	isoch_asic_h_sync_reg_1;
-	uint32_t 	bus_interval_adjust;
+	uint32_t	width;
+	uint32_t	height;
+	uint32_t	freq;
+	uint32_t	h_total_time;
+	uint32_t	h_sync_time;
+	uint32_t	h_back_porch;
+	uint32_t	v_total_time;
+	uint32_t	v_sync_time;
+	uint32_t	v_back_porch;
+	uint32_t	isoch_num_of_pkt;
+	uint32_t	isoch_td_size_in_kb;
+	uint32_t	isoch_zero_bytes;
+	uint32_t	itp_per_frame;
+	uint32_t	num_of_idle;
+	uint32_t	td_size;
+	uint32_t	h_sync_reg_1;
+	uint32_t	h_sync_reg_2;
+	uint32_t	v_sync_reg_1;
+	uint32_t	v_sync_reg_2;
+	uint32_t	iso_reg;
+	uint32_t	bulk_fpga_pll;
+	uint32_t	bulk_asic_pll;
+	uint32_t	isoch_fpga_pll;
+	uint32_t	isoch_asic_pll;
+	uint32_t	isoch_fpga_h_sync_reg_1;
+	uint32_t	isoch_asic_h_sync_reg_1;
+	uint32_t	bus_interval_adjust;
 };
 
 struct registry
@@ -80,6 +80,9 @@ struct vr_params
 	uint32_t	compression_mask_index;
 	uint32_t	compression_mask_index_min;
 	uint32_t	compression_mask_index_max;
+	uint32_t	compression_low_water_mark;
+	uint32_t	compression_high_water_mark;
+	bool		dynamic_compression_mask;
 
 	uint32_t	h_sync_reg_1;
 	uint32_t	h_sync_reg_2;
@@ -95,10 +98,11 @@ struct vr_params
 #define	MAX_NUM_FRAGMENT	((MAX_BUFFER_SIZE + PAGE_SIZE - 1) >> PAGE_SHIFT)
 
 struct primary_surface {
-	struct list_head 	list_entry;
+	struct list_head	list_entry;
 	uint64_t		handle;
 	uint64_t		user_buffer;
 	uint32_t		buffer_length;
+	uint32_t		xfer_length;
 	uint32_t		width;
 	uint32_t		height;
 	uint32_t		pitch;
@@ -118,10 +122,17 @@ struct primary_surface {
 	unsigned int		nr_pages;
 	int			pages_pinned;
 	struct scatterlist 	sglist[MAX_NUM_FRAGMENT];
+
+	/*
+	 * compression working buffer
+	 */
+	uint8_t			compressed_buffer[MAX_BUFFER_SIZE];
+	uint8_t			working_buffer[MAX_BUFFER_SIZE];
+	uint32_t		compressed_buffer_size;
 };
 
 struct render_ctx {
-	struct list_head 	list_entry;
+	struct list_head	list_entry;
 
 	struct dev_ctx *	dev_ctx;
 	struct primary_surface*	primary_surface;
@@ -134,23 +145,23 @@ struct render_ctx {
 };
 
 struct render {
-	struct list_head 	free_list;
+	struct list_head	free_list;
 	uint32_t		free_list_count;
-	spinlock_t 		free_list_lock;
+	spinlock_t		free_list_lock;
 
-	struct list_head 	ready_list;
+	struct list_head	ready_list;
 	uint32_t		ready_list_count;
-	spinlock_t 		ready_list_lock;
+	spinlock_t		ready_list_lock;
 
-	struct list_head 	busy_list;
+	struct list_head	busy_list;
 	uint32_t		busy_list_count;
-	spinlock_t 		busy_list_lock;
+	spinlock_t		busy_list_lock;
 
 	struct render_ctx	render_ctx[NUM_OF_RENDER_CTX];
 
-	struct list_head 	surface_list;
+	struct list_head	surface_list;
 	uint32_t		surface_list_count;
-	spinlock_t 		surface_list_lock;
+	spinlock_t		surface_list_lock;
 
 	struct display_mode	display_mode;
 	uint32_t		last_frame_num;
@@ -191,14 +202,14 @@ struct dev_ctx {
 	struct usb_interface*		usb_ifc_intr;
 	struct usb_host_endpoint*	ep_intr_in;
 	struct usb_endpoint_descriptor*	ep_desc_intr_in;
-	int 				ep_num_intr_in;
+	int					ep_num_intr_in;
 	int				usb_pipe_intr_in;
 	struct urb*			intr_urb;
 	uint8_t				intr_data;
 	uint32_t			intr_pipe_pending_count;
 	bool				intr_pipe_started;
 	struct workqueue_struct *	intr_pipe_wq;
-	struct work_struct 		intr_pipe_work;
+	struct work_struct		intr_pipe_work;
 
 	struct registry			registry;
 
@@ -228,7 +239,7 @@ struct dev_ctx {
 	 * SURFACE_TYPE_VIRTUAL_CONTIGUOUS/SURFACE_TYPE_PHYSICAL_CONTIGUOUS
 	 * allocation management
 	 */
-	struct page * 			start_page;
+	struct page *			start_page;
 };
 
 #endif // _FL2000_CTX_H_

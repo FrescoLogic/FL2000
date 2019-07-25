@@ -58,41 +58,51 @@
 
 size_t fl2000_comp_gravity_low(
 	struct dev_ctx * dev_ctx,
-	struct render_ctx * render_ctx,
 	size_t data_buffer_length,
 	uint8_t * source,
 	uint8_t * target,
 	uint32_t num_of_pixels,
 	uint32_t bytes_per_pixel,
-	bool NoCompressionToFirst1K);
+	bool NoCompressionToFirst1K
+	);
 
 size_t fl2000_compression_gravity(
 	struct dev_ctx * dev_ctx,
-	struct render_ctx * render_ctx,
 	size_t DataBufferLength,
-	uint8_t * Source,
-	uint8_t * Target,
-	uint32_t num_of_pixels);
+	uint8_t * source,
+	uint8_t * target,
+	uint32_t num_of_pixels
+	);
 
 size_t fl2000_compression_gravity2(
 	struct dev_ctx * dev_ctx,
-	struct render_ctx * render_ctx,
 	size_t data_buffer_length,
 	uint8_t * source,
 	uint8_t * target,
-	uint32_t num_of_pixels);
+	uint8_t * working_buffer,
+	uint32_t num_of_pixels
+	);
 
 size_t fl2000_comp_decompress_and_check(
-    struct dev_ctx * dev_ctx,
-    size_t CompressedBufferLength,
-    uint8_t * source,
-    uint8_t * target,
-    uint32_t PixelBytes,
-    uint32_t num_of_pixels);
+	struct dev_ctx * dev_ctx,
+	size_t CompressedBufferLength,
+	uint8_t * source,
+	uint8_t * target,
+	uint32_t PixelBytes,
+	uint32_t num_of_pixels
+	);
 
 void fl2000_comp_raise_mask(struct dev_ctx * dev_ctx);
 void fl2000_comp_lower_mask(struct dev_ctx * dev_ctx);
 void fl2000_comp_apply_safest_mask(struct dev_ctx * dev_ctx);
+
+void
+fl2000_compression_convert_3_to_2(
+	uint8_t * target,
+	uint8_t * source,
+	size_t num_of_pixels,
+	uint32_t color_mode
+	);
 
 #endif // _FL2000_COMPRESSION_H_
 

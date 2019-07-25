@@ -376,6 +376,7 @@ bool fl2000_monitor_set_resolution(struct dev_ctx * dev_ctx, bool pll_changed)
 	if (dev_ctx->vr_params.use_compression) {
 		// Set bit 24, Enable compression mode.
 		//
+		dbg_msg(TRACE_LEVEL_INFO, DBG_HW, "enable compression mode");
 		fl2000_reg_bit_set(dev_ctx, REG_OFFSET_8004, 24);
 	}
 
@@ -384,11 +385,13 @@ bool fl2000_monitor_set_resolution(struct dev_ctx * dev_ctx, bool pll_changed)
 		    dev_ctx->vr_params.color_mode_16bit) {
 			// Bit 31 for 555 mode.
 			//
+			dbg_msg(TRACE_LEVEL_INFO, DBG_HW, "16bit 555 mode");
 			fl2000_reg_bit_set(dev_ctx, REG_OFFSET_8004, 31);
 		}
 		else {
 			// Bit 6 for 565 mode.
 			//
+			dbg_msg(TRACE_LEVEL_INFO, DBG_HW, "16bit 565 mode");
 			fl2000_reg_bit_set(dev_ctx, REG_OFFSET_8004, 6);
 		}
 	}
@@ -396,6 +399,7 @@ bool fl2000_monitor_set_resolution(struct dev_ctx * dev_ctx, bool pll_changed)
 		 dev_ctx->vr_params.output_image_type) {
 		// Bit 25 for enable eight bit color mode.
 		//
+		dbg_msg(TRACE_LEVEL_INFO, DBG_HW, "8bit mode");
 		fl2000_reg_bit_set(dev_ctx, REG_OFFSET_8004, 25);
 	}
 

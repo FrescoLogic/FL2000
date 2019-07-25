@@ -270,9 +270,51 @@ fl2000_ioctl_notify_surface_update(struct dev_ctx * dev_ctx, unsigned long arg)
 				goto unlock_surface;
 			}
 
-			pixel_swap(surface->shadow_buffer,
-				surface->system_buffer,
-				surface->buffer_length);
+			if (dev_ctx->vr_params.use_compression) {
+				uint32_t compressed_size;
+
+				/*
+				 * fl2000_compression_gravity2 converts RGB24
+				 * to RGB16_555 and then compress the RGB16_555
+				 * image using run length encoding algorithm.
+				 */
+				if (IS_DEVICE_USB2LINK(dev_ctx))
+				{
+					compressed_size = fl2000_compression_gravity2(
+						dev_ctx,
+						surface->buffer_length,
+						surface->system_buffer,		// source
+						surface->compressed_buffer,	// target
+						surface->working_buffer,
+						surface->width * surface->height
+						);
+				}
+				else
+				{
+					compressed_size = fl2000_compression_gravity(
+						dev_ctx,
+						surface->buffer_length,
+						surface->system_buffer,		// source
+						surface->compressed_buffer,	// target
+						surface->width * surface->height
+						);
+				}
+
+				pixel_swap(surface->shadow_buffer,
+					surface->compressed_buffer,
+					compressed_size);
+				surface->xfer_length = compressed_size;
+
+				dbg_msg(TRACE_LEVEL_INFO, DBG_PNP,
+					"buffer_length(0x%x)/compressed_size(0x%x)\n",
+					surface->buffer_length,
+					compressed_size);
+			}
+			else {
+				pixel_swap(surface->shadow_buffer,
+					surface->system_buffer,
+					surface->buffer_length);
+			}
 
 			fl2000_primary_surface_update(
 				dev_ctx, surface);
@@ -285,9 +327,53 @@ unlock_surface:
 			 * surface is not SURFACE_TYPE_VIRTUAL_FRAGMENTED_VOLATILE
 			 * we can safely access system_buffer.
 			 */
-			pixel_swap(surface->shadow_buffer,
-				surface->system_buffer,
-				surface->buffer_length);
+			if (dev_ctx->vr_params.use_compression) {
+				uint32_t compressed_size;
+
+				/*
+				 * fl2000_compression_gravity2 converts RGB24
+				 * to RGB16_555 and then compress the RGB16_555
+				 * image using run length encoding algorithm.
+				 */
+				if (IS_DEVICE_USB2LINK(dev_ctx))
+				{
+					compressed_size = fl2000_compression_gravity2(
+						dev_ctx,
+						surface->buffer_length,
+						surface->system_buffer,		// source
+						surface->compressed_buffer,	// target
+						surface->working_buffer,
+						surface->width * surface->height
+						);
+				}
+				else
+				{
+					compressed_size = fl2000_compression_gravity(
+						dev_ctx,
+						surface->buffer_length,
+						surface->system_buffer,		// source
+						surface->compressed_buffer,	// target
+						surface->width * surface->height
+						);
+				}
+
+				pixel_swap(surface->shadow_buffer,
+					surface->compressed_buffer,
+					compressed_size);
+				surface->xfer_length = ((compressed_size + 7) / 8) * 8;
+
+				dbg_msg(TRACE_LEVEL_INFO, DBG_PNP,
+					"buffer_length(0x%x)/compressed_size(0x%x)/xfer_length(0x%x)\n",
+					surface->buffer_length,
+					compressed_size,
+					surface->xfer_length
+					);
+			}
+			else {
+				pixel_swap(surface->shadow_buffer,
+					surface->system_buffer,
+					surface->buffer_length);
+			}
 
 			fl2000_primary_surface_update(
 				dev_ctx, surface);

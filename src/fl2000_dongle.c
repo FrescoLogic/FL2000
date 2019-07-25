@@ -98,7 +98,7 @@ void fl2000_dongle_stop(struct dev_ctx * dev_ctx)
 	fl2000_dongle_reset(dev_ctx);
 
 exit:
-    dbg_msg(TRACE_LEVEL_VERBOSE, DBG_PNP, "<<<<");
+	dbg_msg(TRACE_LEVEL_VERBOSE, DBG_PNP, "<<<<");
 }
 
 int
@@ -129,13 +129,14 @@ fl2000_dongle_set_params(struct dev_ctx * dev_ctx, struct vr_params * vr_params)
 	dev_ctx->vr_params.end_of_frame_type = EOF_ZERO_LENGTH;
 
 	if (dev_ctx->registry.CompressionEnable ||
-	    vr_params->use_compression) {
+		vr_params->use_compression) {
 		dev_ctx->vr_params.use_compression = 1;
+		dev_ctx->vr_params.dynamic_compression_mask = 1;
 
 		dev_ctx->vr_params.compression_mask_index_min = COMPRESSION_MASK_INDEX_MINIMUM;
 		dev_ctx->vr_params.compression_mask_index_max = COMPRESSION_MASK_INDEX_MAXIMUM;
 
-		if (dev_ctx->registry.Usb2PixelFormatTransformCompressionEnable) {
+		if (dev_ctx->vr_params.output_image_type == OUTPUT_IMAGE_TYPE_RGB_16) {
 			// Bug#6346: Need more aggressive compression mask.
 			//
 			dev_ctx->vr_params.compression_mask = COMPRESSION_MASK_13_BIT_VALUE;
@@ -149,6 +150,23 @@ fl2000_dongle_set_params(struct dev_ctx * dev_ctx, struct vr_params * vr_params)
 			dev_ctx->vr_params.compression_mask = COMPRESSION_MASK_23_BIT_VALUE;
 			dev_ctx->vr_params.compression_mask_index = COMPRESSION_MASK_23_BIT_INDEX;
 		}
+
+		/*
+		 * how are the low_water_mark/high_water_mark values derived?
+		 * For USB2 bandwidth, a typical bus provides 480 mb/s. Taking
+		 * 8b/10b encoding into account, maximum bandwidth is 480/10*8
+		 * = 384 mb/sec = 48 MB/s.
+		 * Since EHCI does not reach this theoretically limit, we assume
+		 * the maximum bandwidth for the client device is about 40 MB/s
+		 * With 40 MB/sec to accomodate 60 frames /sec, each frame
+		 * is about 682KB. You have to deduct vsync interval time,
+		 * during which the fl2000 refuse any data-in packet, so the
+		 * possible maximum frame size is 576KB.
+		 * On high speed port connected to xHC, the theoretical throughput
+		 * could reach higher value.
+		 */
+		dev_ctx->vr_params.compression_low_water_mark = 384 * 1000;
+		dev_ctx->vr_params.compression_high_water_mark = 640 * 1000;
 	}
 
 	switch (dev_ctx->vr_params.output_image_type) {
@@ -182,20 +200,20 @@ fl2000_dongle_set_params(struct dev_ctx * dev_ctx, struct vr_params * vr_params)
 	dev_ctx->vr_params.v_sync_reg_2 = entry->v_sync_reg_2;
 
 	dev_ctx->vr_params.h_total_time = entry->h_total_time;
-	dev_ctx->vr_params.h_sync_time  = entry->h_sync_time;
+	dev_ctx->vr_params.h_sync_time	= entry->h_sync_time;
 	dev_ctx->vr_params.h_back_porch = entry->h_back_porch;
 	dev_ctx->vr_params.v_total_time = entry->v_total_time;
-	dev_ctx->vr_params.v_sync_time  = entry->v_sync_time;
+	dev_ctx->vr_params.v_sync_time	= entry->v_sync_time;
 	dev_ctx->vr_params.v_back_porch = entry->v_back_porch;
 
 	if (dev_ctx->hdmi_chip_found)
-	    fl2000_hdmi_compliance_tweak(dev_ctx);
+		fl2000_hdmi_compliance_tweak(dev_ctx);
 
 	new_pll = entry->bulk_asic_pll;
 
 	if (new_pll != dev_ctx->vr_params.pll_reg) {
-	    pll_changed = true;
-	    dev_ctx->vr_params.pll_reg = new_pll;
+		pll_changed = true;
+		dev_ctx->vr_params.pll_reg = new_pll;
 	}
 
 	ret = fl2000_monitor_set_resolution(dev_ctx, pll_changed);
@@ -234,12 +252,13 @@ fl2000_set_display_mode(
 	dbg_msg(TRACE_LEVEL_VERBOSE, DBG_PNP, ">>>>");
 
 	dbg_msg(TRACE_LEVEL_INFO, DBG_PNP,
-		 "Display information width:%u height:%d.",
+		 "Display information width:%u, height:%u, use_compression:%u",
 		 display_mode->width,
-		 display_mode->height);
+		 display_mode->height,
+		 display_mode->use_compression);
 
 	if ((dev_ctx->vr_params.width != display_mode->width) ||
-	    (dev_ctx->vr_params.height != display_mode->height))
+		(dev_ctx->vr_params.height != display_mode->height))
 		resolution_changed = true;
 
 	fl2000_render_stop(dev_ctx);
@@ -249,13 +268,14 @@ fl2000_set_display_mode(
 	 * user want to turn off monitor
 	 */
 	if (display_mode->width == 0 && display_mode->height == 0)
-	    goto exit;
+		goto exit;
 
 	memset(&vr_params, 0, sizeof(struct vr_params));
 
 	vr_params.width = display_mode->width;
 	vr_params.height = display_mode->height;
 	vr_params.freq = 60;
+	vr_params.use_compression = display_mode->use_compression;
 	switch (display_mode->input_color_format) {
 	case COLOR_FORMAT_RGB_24:
 		vr_params.input_bytes_per_pixel = 3;
