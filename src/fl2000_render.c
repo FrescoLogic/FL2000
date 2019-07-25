@@ -273,6 +273,8 @@ void fl2000_render_completion(struct render_ctx * render_ctx)
 
 	dbg_msg(TRACE_LEVEL_VERBOSE, DBG_RENDER, ">>>>");
 
+	WARN_ON(in_irq());
+
 	/*
 	 * remove this render_ctx from busy_list
 	 */
