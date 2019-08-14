@@ -27,6 +27,16 @@
 #define	NUM_FRAME_BUFFERS			16
 
 #define	USE_COMPRESSION				1
+#define	COMPRESS_SIZE_LIMIT			0	// no limit on the compress size
+//#define	COMPRESS_SIZE_LIMIT			1666666		// for xHC that can do 100MB/s, the driver compress each frame to size no larger than  (100*1000*1000/60) bytes
+
+/*
+ * Note: valid values for OUTPUT_COLOR_FORMAT are:
+ * COLOR_FORMAT_RGB24, COLOR_FORMAT_RGB_16_565, COLOR_FORMAT_RGB_16_555
+ *
+ * when USE_COMPRESSION is set to 1, COLOR_FORMAT_RGB_16_565 is not allowed
+ */
+#define	OUTPUT_COLOR_FORMAT			COLOR_FORMAT_RGB_16_555
 
 /*
  * data structures
@@ -418,8 +428,9 @@ void test_display(int fd, uint32_t width, uint32_t height, uint32_t index)
 	display_mode.height = height;
 	display_mode.refresh_rate = 60;
 	display_mode.input_color_format = COLOR_FORMAT_RGB_24;
-	display_mode.output_color_format = COLOR_FORMAT_RGB_24;
+	display_mode.output_color_format = OUTPUT_COLOR_FORMAT;
 	display_mode.use_compression = USE_COMPRESSION;
+	display_mode.compress_size_limit = COMPRESS_SIZE_LIMIT;
 
 	ret_val = ioctl(fd, IOCTL_FL2000_SET_DISPLAY_MODE, &display_mode);
 	if (ret_val < 0) {
@@ -537,8 +548,9 @@ void test_display_on_resolution(int fd, uint32_t width, uint32_t height)
 	display_mode.height = height;
 	display_mode.refresh_rate = 60;
 	display_mode.input_color_format = COLOR_FORMAT_RGB_24;
-	display_mode.output_color_format = COLOR_FORMAT_RGB_24;
+	display_mode.output_color_format = OUTPUT_COLOR_FORMAT;
 	display_mode.use_compression = USE_COMPRESSION;
+	display_mode.compress_size_limit = COMPRESS_SIZE_LIMIT;
 
 	ret_val = ioctl(fd, IOCTL_FL2000_SET_DISPLAY_MODE, &display_mode);
 	if (ret_val < 0) {

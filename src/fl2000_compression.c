@@ -600,6 +600,7 @@ fl2000_compression_gravity(
 	size_t data_buffer_length,
 	uint8_t * source,
 	uint8_t * target,
+	uint8_t * working_buffer,
 	uint32_t num_of_pixels
 	)
 {
@@ -615,17 +616,67 @@ fl2000_compression_gravity(
 	// 2. Algorithm - we calculate pixel and how many similar color pixel count.
 	//    if no count number is written, the count is equal to 1.
 	//
-	pixelBytes = GET_BYTES_PER_PIXEL(dev_ctx->vr_params.output_image_type);
+        pixelBytes = GET_BYTES_PER_PIXEL(dev_ctx->vr_params.output_image_type);
 
-	compressed_length = fl2000_comp_gravity_low(
-		dev_ctx,
-		data_buffer_length,
-		source,
-		target,
-		num_of_pixels,
-		pixelBytes,
-		false);
+	/*
+	 * FIXME: we always assumed the input color format is 24bpp.
+	 */
+	if (pixelBytes == 2)
+		fl2000_compression_convert_3_to_2(
+			working_buffer,
+			source,
+			num_of_pixels,
+			dev_ctx->vr_params.color_mode_16bit);
 
+recompress:
+        switch (pixelBytes)
+	{
+	case 2:
+		compressed_length = fl2000_comp_gravity_low(
+			dev_ctx,
+			num_of_pixels * 2,	// data_buffer_length,
+			working_buffer,		// source,
+			target,
+			num_of_pixels,
+			2,			// 2 bytes per pixel
+			true);
+		break;
+
+	default:
+		compressed_length = fl2000_comp_gravity_low(
+			dev_ctx,
+			data_buffer_length,
+			source,
+			target,
+			num_of_pixels,
+			pixelBytes,
+			false);
+		break;
+	};
+
+	/*
+	 * if the compressed buffer size is too large, lower the compression mask
+	 * and re-compress again
+	 */
+	if (dev_ctx->vr_params.dynamic_compression_mask &&
+            dev_ctx->vr_params.compress_size_limit) {
+		if (compressed_length < (dev_ctx->vr_params.compress_size_limit / 2)) {
+			if (dev_ctx->vr_params.compression_mask_index >
+			    dev_ctx->vr_params.compression_mask_index_min)
+			{
+				fl2000_comp_raise_mask(dev_ctx);
+				goto recompress;
+			}
+		}
+		else if (compressed_length > dev_ctx->vr_params.compress_size_limit) {
+			if (dev_ctx->vr_params.compression_mask_index <
+			    dev_ctx->vr_params.compression_mask_index_max)
+			{
+				fl2000_comp_lower_mask(dev_ctx);
+				goto recompress;
+			}
+		}
+	}
 	// Compressed data should be always smaller.
 	//
 	ASSERT((dev_ctx->vr_params.input_bytes_per_pixel * num_of_pixels ) >= compressed_length );

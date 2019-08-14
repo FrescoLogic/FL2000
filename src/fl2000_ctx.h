@@ -80,8 +80,9 @@ struct vr_params
 	uint32_t	compression_mask_index;
 	uint32_t	compression_mask_index_min;
 	uint32_t	compression_mask_index_max;
-	uint32_t	compression_low_water_mark;
-	uint32_t	compression_high_water_mark;
+	uint32_t	compression_low_water_mark;	// this is for USB2.0 only
+	uint32_t	compression_high_water_mark;	// this is for USB2.0 only
+	uint32_t	compress_size_limit;		// generic compression size limit
 	bool		dynamic_compression_mask;
 
 	uint32_t	h_sync_reg_1;

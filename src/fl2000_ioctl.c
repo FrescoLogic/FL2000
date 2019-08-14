@@ -296,6 +296,7 @@ fl2000_ioctl_notify_surface_update(struct dev_ctx * dev_ctx, unsigned long arg)
 						surface->buffer_length,
 						surface->system_buffer,		// source
 						surface->compressed_buffer,	// target
+						surface->working_buffer,
 						surface->width * surface->height
 						);
 				}
@@ -353,6 +354,7 @@ unlock_surface:
 						surface->buffer_length,
 						surface->system_buffer,		// source
 						surface->compressed_buffer,	// target
+						surface->working_buffer,
 						surface->width * surface->height
 						);
 				}

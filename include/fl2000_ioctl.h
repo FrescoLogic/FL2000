@@ -255,6 +255,17 @@ struct display_mode {
 	uint32_t	output_color_format;
 	uint32_t	use_compression;
 	uint32_t	transfer_pipe;
+
+	/*
+	 * work-around FL2000 compatibility with some low-bandwidth host controller
+	 * FL2000 is a USB bandwith hog, and requires the host driver to pump 60 frames
+	 * per second. For some low performance xHC, the bandwidth required by FL2000
+	 * might not meet what the xHC can offer. For example, some SoC can do 100MB/s.
+	 * In order to send 60 frames in 1 second, each frame has to be compressed to
+	 * below 100*1000*1000 / 60 = 1,666,666 bytes.
+	 * In this case, we need to set compress_size_limit = 1,666,666
+	 */
+	uint32_t	compress_size_limit;
 };
 #define IOCTL_FL2000_SET_DISPLAY_MODE		    (FL2000_IOCTL_BASE + 2)
 

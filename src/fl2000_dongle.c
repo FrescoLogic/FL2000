@@ -252,10 +252,11 @@ fl2000_set_display_mode(
 	dbg_msg(TRACE_LEVEL_VERBOSE, DBG_PNP, ">>>>");
 
 	dbg_msg(TRACE_LEVEL_INFO, DBG_PNP,
-		 "Display information width:%u, height:%u, use_compression:%u",
+		 "Display information width:%u, height:%u, use_compression:%u, compress_size_limit:%u",
 		 display_mode->width,
 		 display_mode->height,
-		 display_mode->use_compression);
+		 display_mode->use_compression,
+		 display_mode->compress_size_limit);
 
 	if ((dev_ctx->vr_params.width != display_mode->width) ||
 		(dev_ctx->vr_params.height != display_mode->height))
@@ -276,6 +277,7 @@ fl2000_set_display_mode(
 	vr_params.height = display_mode->height;
 	vr_params.freq = 60;
 	vr_params.use_compression = display_mode->use_compression;
+	vr_params.compress_size_limit = display_mode->compress_size_limit;
 	switch (display_mode->input_color_format) {
 	case COLOR_FORMAT_RGB_24:
 		vr_params.input_bytes_per_pixel = 3;

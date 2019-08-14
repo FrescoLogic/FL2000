@@ -71,6 +71,7 @@ size_t fl2000_compression_gravity(
 	size_t DataBufferLength,
 	uint8_t * source,
 	uint8_t * target,
+	uint8_t * working_buffer,
 	uint32_t num_of_pixels
 	);
 
