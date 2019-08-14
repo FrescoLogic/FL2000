@@ -34,7 +34,7 @@ void fl2000_bulk_main_completion(
 	pending_count = --render_ctx->pending_count;
 	spin_unlock_irqrestore(&dev_ctx->count_lock, flags);
 	if (pending_count == 0) {
-		if (in_irq()) {
+		if (in_irq() || irqs_disabled()) {
 			struct tasklet_struct * tasklet = &render_ctx->tasklet;
 
 			tasklet_init(
@@ -66,7 +66,7 @@ void fl2000_bulk_zero_length_completion(
 	pending_count = --render_ctx->pending_count;
 	spin_unlock_irqrestore(&dev_ctx->count_lock, flags);
 	if (pending_count == 0) {
-		if (in_irq()) {
+		if (in_irq() || irqs_disabled()) {
 			struct tasklet_struct * tasklet = &render_ctx->tasklet;
 
 			tasklet_init(
