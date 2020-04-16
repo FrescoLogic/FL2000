@@ -32,11 +32,11 @@
 
 /*
  * Note: valid values for OUTPUT_COLOR_FORMAT are:
- * COLOR_FORMAT_RGB24, COLOR_FORMAT_RGB_16_565, COLOR_FORMAT_RGB_16_555
+ * COLOR_FORMAT_RGB_24, COLOR_FORMAT_RGB_16_565, COLOR_FORMAT_RGB_16_555
  *
  * when USE_COMPRESSION is set to 1, COLOR_FORMAT_RGB_16_565 is not allowed
  */
-#define	OUTPUT_COLOR_FORMAT			COLOR_FORMAT_RGB_16_555
+#define	OUTPUT_COLOR_FORMAT			COLOR_FORMAT_RGB_24
 
 /*
  * data structures
@@ -613,6 +613,7 @@ void test_display_on_resolution(int fd, uint32_t width, uint32_t height)
 		surface_info.pitch		= width * 3;
 		surface_info.color_format	= COLOR_FORMAT_RGB_24;
 		surface_info.type		= mem_type;
+
 		ret_val = ioctl(fd, IOCTL_FL2000_CREATE_SURFACE, &surface_info);
 		if (ret_val < 0) {
 			fprintf(stderr, "IOCTL_FL2000_CREATE_SURFACE failed %d\n",

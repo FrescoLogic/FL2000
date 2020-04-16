@@ -444,21 +444,21 @@ int fl2000_surface_create(
 	spin_unlock_bh(&dev_ctx->render.surface_list_lock);
 
 	dbg_msg(TRACE_LEVEL_INFO, DBG_PNP,
-		"surface(%p) created for\n"
+		"surface(%lx) created for\n"
 		"user_buffer(%x)/buffer_length(0x%x)\n"
 		"width(%u)/height(%u)/pitch(%u)/type(%u),\n"
-		"render_buffer(%p), system_buffer(%p), shadow_buffer(%p),\n"
+		"render_buffer(%lx), system_buffer(%lx), shadow_buffer(%lx),\n"
 		"surface_list_count(%u)",
-		surface,
+		(unsigned long) surface,
 		(unsigned int) surface->user_buffer,
 		(unsigned int) surface->buffer_length,
 		surface->width,
 		surface->height,
 		surface->pitch,
 		surface->type,
-		surface->render_buffer,
-		surface->system_buffer,
-		surface->shadow_buffer,
+		(unsigned long) surface->render_buffer,
+		(unsigned long) surface->system_buffer,
+		(unsigned long) surface->shadow_buffer,
 		dev_ctx->render.surface_list_count);
 
 exit:

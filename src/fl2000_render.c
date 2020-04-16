@@ -58,8 +58,8 @@ fl2000_render_with_busy_list_lock(
 	ret_val = usb_submit_urb(render_ctx->main_urb, GFP_ATOMIC);
 	if (ret_val != 0) {
 		dbg_msg(TRACE_LEVEL_ERROR, DBG_PNP,
-			"[ERR] usb_submit-urb(%p) failed with %d!",
-			render_ctx->main_urb,
+			"[ERR] usb_submit_urb(%lx) failed with %d!",
+			(unsigned long) render_ctx->main_urb,
 			ret_val);
 
 		spin_lock_irqsave(&dev_ctx->count_lock, flags);

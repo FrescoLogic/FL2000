@@ -192,9 +192,9 @@ fl2000_ioctl_notify_surface_update(struct dev_ctx * dev_ctx, unsigned long arg)
 		goto exit;
 	}
 
-	dbg_msg(TRACE_LEVEL_VERBOSE, DBG_PNP,
-		"handle(%p)/buffer_length(0x%x)",
-		(void*) (unsigned long) info.handle,
+	dbg_msg(TRACE_LEVEL_INFO, DBG_PNP,
+		"handle(0x%lx)/buffer_length(0x%x)",
+		(unsigned long) info.handle,
 		(unsigned int) info.buffer_length);
 
 	surface = NULL;
