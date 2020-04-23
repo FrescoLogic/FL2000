@@ -24,6 +24,39 @@ fl2000_init_flags(struct dev_ctx * dev_ctx)
 // P U B L I C
 /////////////////////////////////////////////////////////////////////////////////
 //
+#if (!GCC_ATOMIC_SUPPORT)
+uint32_t fl2000_interlocked_increment(
+	struct dev_ctx * 	dev_ctx,
+	volatile uint32_t *	target
+	)
+{
+	unsigned long 	flags;
+	uint32_t	ret_val;
+
+	spin_lock_irqsave(&dev_ctx->count_lock, flags);
+	*target = *target + 1;
+	ret_val = *target;
+	spin_unlock_irqrestore(&dev_ctx->count_lock, flags);
+
+	return ret_val;
+}
+
+uint32_t fl2000_interlocked_decrement(
+	struct dev_ctx * 	dev_ctx,
+	volatile uint32_t *	target
+	)
+{
+	unsigned long 	flags;
+	uint32_t	ret_val;
+
+	spin_lock_irqsave(&dev_ctx->count_lock, flags);
+	*target = *target - 1;
+	ret_val = *target;
+	spin_unlock_irqrestore(&dev_ctx->count_lock, flags);
+
+	return ret_val;
+}
+#endif /* GCC_ATOMIC_SUPPORT */
 
 int
 fl2000_dev_select_interface(struct dev_ctx * dev_ctx)
@@ -62,7 +95,9 @@ int fl2000_dev_init(struct dev_ctx * dev_ctx)
 
 	dbg_msg(TRACE_LEVEL_VERBOSE, DBG_PNP, ">>>>");
 
+#if (!GCC_ATOMIC_SUPPORT)
 	spin_lock_init(&dev_ctx->count_lock);
+#endif
 	fl2000_init_flags(dev_ctx);
 
 	ret_val = fl2000_dev_select_interface(dev_ctx);

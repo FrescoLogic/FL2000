@@ -38,7 +38,7 @@ do {									\
 } while( 0 );
 
 #define ERROR_SOFTWARE()                        ASSERT(false)
-#define UNREFERENCED_PARAMETER(a)             	{ a = a;}
+#define UNREFERENCED_PARAMETER(P)             	((void) P)
 
 #define RtlCopyMemory(dst, src, length)		memcpy(dst, src, length)
 #define RtlZeroMemory(dst, length)		memset(dst, 0, length)

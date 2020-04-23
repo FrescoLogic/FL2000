@@ -277,7 +277,6 @@ int fl2000_surface_create(
 	struct primary_surface* s;
 	struct primary_surface* surface;
 	int ret = 0;
-	unsigned long flags;
 
 	/*
 	 * sanity check. The input color_format and pitch must match
@@ -437,9 +436,7 @@ int fl2000_surface_create(
 	spin_lock_bh(&dev_ctx->render.surface_list_lock);
 	list_add_tail(&surface->list_entry, &dev_ctx->render.surface_list);
 
-	spin_lock_irqsave(&dev_ctx->count_lock, flags);
-	dev_ctx->render.surface_list_count++;
-	spin_unlock_irqrestore(&dev_ctx->count_lock, flags);
+	InterlockedIncrement(&dev_ctx->render.surface_list_count);
 
 	spin_unlock_bh(&dev_ctx->render.surface_list_lock);
 
@@ -472,7 +469,7 @@ void fl2000_surface_destroy(
 	dbg_msg(TRACE_LEVEL_INFO, DBG_PNP,
 		"deleting surface(%p) user_buffer(0x%x)/buffer_length(%u)/"
 		"width(%u)/height(%u)/pitch(%u)/type(%u),"
-		"render_buffer(%p), surface_list_count(%u)\n",
+		"render_buffer(%p), surface_list_count(%u)",
 		surface,
 		(unsigned int) surface->user_buffer,
 		(unsigned int) surface->buffer_length,
@@ -497,7 +494,6 @@ void fl2000_surface_destroy_all(struct dev_ctx * dev_ctx)
 {
 	struct primary_surface* surface;
 	struct list_head * list_head = &dev_ctx->render.surface_list;
-	unsigned long flags;
 
 	spin_lock_bh(&dev_ctx->render.surface_list_lock);
 	while (!list_empty(list_head)) {
@@ -505,14 +501,12 @@ void fl2000_surface_destroy_all(struct dev_ctx * dev_ctx)
 			list_head, struct primary_surface, list_entry);
 		list_del_init(&surface->list_entry);
 
-		spin_lock_irqsave(&dev_ctx->count_lock, flags);
-		dev_ctx->render.surface_list_count--;
-		spin_unlock_irqrestore(&dev_ctx->count_lock, flags);
+		InterlockedDecrement(&dev_ctx->render.surface_list_count);
 
 		spin_unlock_bh(&dev_ctx->render.surface_list_lock);
 
 		dbg_msg(TRACE_LEVEL_INFO, DBG_PNP,
-			"destroying surface(%p), surface_list_count(%u)\n",
+			"destroying surface(%p), surface_list_count(%u)",
 			surface, dev_ctx->render.surface_list_count);
 
 		fl2000_surface_destroy(dev_ctx, surface);

@@ -101,7 +101,6 @@ void fl2000_intr_pipe_destroy(struct dev_ctx * dev_ctx)
 int fl2000_intr_pipe_start(struct dev_ctx * dev_ctx)
 {
 	int ret_val;
-	unsigned long flags;
 
 	dev_ctx->intr_pipe_started = true;
 	usb_fill_int_urb(
@@ -114,17 +113,13 @@ int fl2000_intr_pipe_start(struct dev_ctx * dev_ctx)
 		dev_ctx,
 		dev_ctx->ep_desc_intr_in->bInterval);
 
-	spin_lock_irqsave(&dev_ctx->count_lock, flags);
-	dev_ctx->intr_pipe_pending_count++;
-	spin_unlock_irqrestore(&dev_ctx->count_lock, flags);
+	InterlockedIncrement(&dev_ctx->intr_pipe_pending_count);
 
 	ret_val = usb_submit_urb(dev_ctx->intr_urb, GFP_KERNEL);
 	if (ret_val < 0) {
 		dbg_msg(TRACE_LEVEL_ERROR, DBG_PNP,
 			"ERROR usb_submit_urb(intr_urb) failed.");
-		spin_lock_irqsave(&dev_ctx->count_lock, flags);
-		dev_ctx->intr_pipe_pending_count--;
-		spin_unlock_irqrestore(&dev_ctx->count_lock, flags);
+		InterlockedDecrement(&dev_ctx->intr_pipe_pending_count);
 		dev_ctx->intr_pipe_started = false;
 	}
 
@@ -156,11 +151,8 @@ void fl2000_intr_pipe_completion(struct urb * urb)
 	struct dev_ctx * const dev_ctx = urb->context;
 	bool work_queued;
 	int ret_val;
-	unsigned long flags;
 
-	spin_lock_irqsave(&dev_ctx->count_lock, flags);
-	dev_ctx->intr_pipe_pending_count--;
-	spin_unlock_irqrestore(&dev_ctx->count_lock, flags);
+	InterlockedDecrement(&dev_ctx->intr_pipe_pending_count);
 
 	/*
 	 * invoke worker-thread for further processing
@@ -193,17 +185,13 @@ void fl2000_intr_pipe_completion(struct urb * urb)
 		dev_ctx,
 		dev_ctx->ep_desc_intr_in->bInterval);
 
-	spin_lock_irqsave(&dev_ctx->count_lock, flags);
-	dev_ctx->intr_pipe_pending_count++;
-	spin_unlock_irqrestore(&dev_ctx->count_lock, flags);
+	InterlockedIncrement(&dev_ctx->intr_pipe_pending_count);
 
 	ret_val = usb_submit_urb(dev_ctx->intr_urb, GFP_KERNEL);
 	if (ret_val < 0) {
 		dbg_msg(TRACE_LEVEL_ERROR, DBG_PNP,
 			"ERROR usb_submit_urb(intr_urb) failed.");
-		spin_lock_irqsave(&dev_ctx->count_lock, flags);
-		dev_ctx->intr_pipe_pending_count--;
-		spin_unlock_irqrestore(&dev_ctx->count_lock, flags);
+		InterlockedDecrement(&dev_ctx->intr_pipe_pending_count);
 		dev_ctx->intr_pipe_started = false;
 	}
 
@@ -216,7 +204,6 @@ void fl2000_intr_pipe_work(struct work_struct * work_item)
 	struct dev_ctx * const dev_ctx =
 		container_of(work_item, struct dev_ctx, intr_pipe_work);
 	int ret_val;
-	unsigned long flags;
 
 	/*
 	 * read interrupt status, and process it
@@ -242,17 +229,13 @@ void fl2000_intr_pipe_work(struct work_struct * work_item)
 		dev_ctx,
 		dev_ctx->ep_desc_intr_in->bInterval);
 
-	spin_lock_irqsave(&dev_ctx->count_lock, flags);
-	dev_ctx->intr_pipe_pending_count++;
-	spin_unlock_irqrestore(&dev_ctx->count_lock, flags);
+	InterlockedIncrement(&dev_ctx->intr_pipe_pending_count);
 
 	ret_val = usb_submit_urb(dev_ctx->intr_urb, GFP_KERNEL);
 	if (ret_val < 0) {
 		dbg_msg(TRACE_LEVEL_ERROR, DBG_PNP,
 			"ERROR usb_submit_urb(intr_urb) failed.");
-		spin_lock_irqsave(&dev_ctx->count_lock, flags);
-		dev_ctx->intr_pipe_pending_count--;
-		spin_unlock_irqrestore(&dev_ctx->count_lock, flags);
+		InterlockedDecrement(&dev_ctx->intr_pipe_pending_count);
 		dev_ctx->intr_pipe_started = false;
 	}
 

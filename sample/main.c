@@ -26,7 +26,7 @@
 #define MAX_FRAME_BUFFER_SIZE			1920*1080*3
 #define	NUM_FRAME_BUFFERS			16
 
-#define	USE_COMPRESSION				1
+#define	USE_COMPRESSION				0
 #define	COMPRESS_SIZE_LIMIT			0	// no limit on the compress size
 //#define	COMPRESS_SIZE_LIMIT			1666666		// for xHC that can do 100MB/s, the driver compress each frame to size no larger than  (100*1000*1000/60) bytes
 

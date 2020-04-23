@@ -27,12 +27,12 @@ void fl2000_bulk_main_completion(
 {
 	struct render_ctx * const render_ctx = urb->context;
 	struct dev_ctx * const dev_ctx = render_ctx->dev_ctx;
-	unsigned long flags;
 	uint32_t pending_count;
 
-	spin_lock_irqsave(&dev_ctx->count_lock, flags);
-	pending_count = --render_ctx->pending_count;
-	spin_unlock_irqrestore(&dev_ctx->count_lock, flags);
+	UNREFERENCED_PARAMETER(dev_ctx);
+
+	pending_count = InterlockedDecrement(&render_ctx->pending_count);
+
 	if (pending_count == 0) {
 		if (in_irq() || irqs_disabled()) {
 			struct tasklet_struct * tasklet = &render_ctx->tasklet;
@@ -60,11 +60,11 @@ void fl2000_bulk_zero_length_completion(
 	struct render_ctx * const render_ctx = urb->context;
 	struct dev_ctx * const dev_ctx = render_ctx->dev_ctx;
 	uint32_t pending_count;
-	unsigned long flags;
 
-	spin_lock_irqsave(&dev_ctx->count_lock, flags);
-	pending_count = --render_ctx->pending_count;
-	spin_unlock_irqrestore(&dev_ctx->count_lock, flags);
+	UNREFERENCED_PARAMETER(dev_ctx);
+
+	pending_count = InterlockedDecrement(&render_ctx->pending_count);
+
 	if (pending_count == 0) {
 		if (in_irq() || irqs_disabled()) {
 			struct tasklet_struct * tasklet = &render_ctx->tasklet;

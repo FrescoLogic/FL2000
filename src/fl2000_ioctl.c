@@ -131,17 +131,13 @@ fl2000_ioctl_destroy_surface(struct dev_ctx * dev_ctx, unsigned long arg)
 	surface = NULL;
 	spin_lock_bh(&dev_ctx->render.surface_list_lock);
 	list_for_each_entry(s, list_head, list_entry) {
-		unsigned long flags;
-
 		dbg_msg(TRACE_LEVEL_INFO, DBG_PNP,
 			"surface(%p), handle(0x%x)\n",
 			s,
 			(unsigned int) s->handle);
 		if (s->handle == info.handle) {
 
-			spin_lock_irqsave(&dev_ctx->count_lock, flags);
-			dev_ctx->render.surface_list_count--;
-			spin_unlock_irqrestore(&dev_ctx->count_lock, flags);
+			InterlockedDecrement(&dev_ctx->render.surface_list_count);
 
 			list_del(&s->list_entry);
 			surface = s;
@@ -192,9 +188,9 @@ fl2000_ioctl_notify_surface_update(struct dev_ctx * dev_ctx, unsigned long arg)
 		goto exit;
 	}
 
-	dbg_msg(TRACE_LEVEL_INFO, DBG_PNP,
-		"handle(0x%lx)/buffer_length(0x%x)",
-		(unsigned long) info.handle,
+	dbg_msg(TRACE_LEVEL_VERBOSE, DBG_PNP,
+		"handle(%p)/buffer_length(0x%x)",
+		(void*) (unsigned long) info.handle,
 		(unsigned int) info.buffer_length);
 
 	surface = NULL;
@@ -306,10 +302,10 @@ fl2000_ioctl_notify_surface_update(struct dev_ctx * dev_ctx, unsigned long arg)
 					compressed_size);
 				surface->xfer_length = compressed_size;
 
-				dbg_msg(TRACE_LEVEL_INFO, DBG_PNP,
-					"buffer_length(0x%x)/compressed_size(0x%x)\n",
-					surface->buffer_length,
-					compressed_size);
+				//dbg_msg(TRACE_LEVEL_INFO, DBG_PNP,
+				//	"buffer_length(0x%x)/compressed_size(0x%x)\n",
+				//	surface->buffer_length,
+				//	compressed_size);
 			}
 			else {
 				pixel_swap(surface->shadow_buffer,
@@ -364,12 +360,12 @@ unlock_surface:
 					compressed_size);
 				surface->xfer_length = ((compressed_size + 7) / 8) * 8;
 
-				dbg_msg(TRACE_LEVEL_INFO, DBG_PNP,
-					"buffer_length(0x%x)/compressed_size(0x%x)/xfer_length(0x%x)\n",
-					surface->buffer_length,
-					compressed_size,
-					surface->xfer_length
-					);
+				//dbg_msg(TRACE_LEVEL_INFO, DBG_PNP,
+				//	"buffer_length(0x%x)/compressed_size(0x%x)/xfer_length(0x%x)\n",
+				//	surface->buffer_length,
+				//	compressed_size,
+				//	surface->xfer_length
+				//	);
 			}
 			else {
 				pixel_swap(surface->shadow_buffer,
@@ -596,7 +592,7 @@ fl2000_ioctl_test_alloc_surface(struct file *file, unsigned long arg)
 	alloc_info.buffer_size = len;
 	alloc_info.usr_addr = usr_addr;
 	alloc_info.phy_addr = (uint64_t) (start_pfn << PAGE_SHIFT);
-	copy_to_user((void*) arg, &alloc_info, sizeof(alloc_info));
+	ret = copy_to_user((void*) arg, &alloc_info, sizeof(alloc_info));
 
 	dbg_msg(TRACE_LEVEL_INFO, DBG_PNP,
 		"usr_addr(0x%lx)/phy_addr(0x%lx) returned",

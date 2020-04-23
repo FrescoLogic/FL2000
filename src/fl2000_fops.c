@@ -16,7 +16,6 @@ int fl2000_open(struct inode * inode, struct file * file)
 	struct dev_ctx * dev_ctx;
 	int ret_val;
 	uint32_t open_count;
-	unsigned long flags;
 
 	ret_val = 0;
 	interface = usb_find_interface(&fl2000_driver, minor);
@@ -35,20 +34,24 @@ int fl2000_open(struct inode * inode, struct file * file)
 		goto exit;
 	}
 
-	spin_lock_irqsave(&dev_ctx->count_lock, flags);
-	open_count = ++dev_ctx->open_count;
-	spin_unlock_irqrestore(&dev_ctx->count_lock, flags);
+	open_count = InterlockedIncrement(&dev_ctx->open_count);
+
 	if (open_count > 1) {
 		dbg_msg(TRACE_LEVEL_ERROR, DBG_PNP,
 			"open_count(%u) exceeds 1?", open_count);
-		spin_lock_irqsave(&dev_ctx->count_lock, flags);
-		dev_ctx->open_count--;
-		spin_unlock_irqrestore(&dev_ctx->count_lock, flags);
+		InterlockedDecrement(&dev_ctx->open_count);
 		ret_val = -EBUSY;
 		goto exit;
 	}
 
 	dbg_msg(TRACE_LEVEL_INFO, DBG_PNP, "open_count(%u)", open_count);
+	dbg_msg(TRACE_LEVEL_INFO, DBG_PNP,
+		"render_ctx: free(%u), ready(%u), busy(%u), surface(%u)",
+		dev_ctx->render.free_list_count,
+		dev_ctx->render.ready_list_count,
+		dev_ctx->render.busy_list_count,
+		dev_ctx->render.surface_list_count
+		);
 
 	file->private_data = dev_ctx;
 	kref_get(&dev_ctx->kref);
@@ -59,8 +62,9 @@ exit:
 int fl2000_release(struct inode * inode, struct file * file)
 {
 	struct dev_ctx * const dev_ctx = file->private_data;
+	struct render_ctx * render_ctx;
+	uint32_t i;
 	uint32_t open_count;
-	unsigned long flags;
 
 	if (dev_ctx == NULL)
 		return -ENODEV;
@@ -77,10 +81,44 @@ int fl2000_release(struct inode * inode, struct file * file)
 	fl2000_dongle_stop(dev_ctx);
 	fl2000_surface_destroy_all(dev_ctx);
 
-	spin_lock_irqsave(&dev_ctx->count_lock, flags);
-	open_count = --dev_ctx->open_count;
-	spin_unlock_irqrestore(&dev_ctx->count_lock, flags);
+	/*
+	 * bug12414: on customer's platform, the underlying stack(eg. Asmedia)
+	 * failed to complete the previously sent URB. We re-initialize
+	 * the render_ctx into default state during client file close operation.
+	 */
+	if (dev_ctx->render.ready_list_count != 0) {
+		dbg_msg(TRACE_LEVEL_INFO, DBG_PNP,
+			"ready_list_count(%u)",
+			dev_ctx->render.ready_list_count);
+	}
+
+	INIT_LIST_HEAD(&dev_ctx->render.free_list);
+	spin_lock_init(&dev_ctx->render.free_list_lock);
+	dev_ctx->render.free_list_count = 0;
+
+	INIT_LIST_HEAD(&dev_ctx->render.ready_list);
+	spin_lock_init(&dev_ctx->render.ready_list_lock);
+	dev_ctx->render.ready_list_count = 0;
+
+	INIT_LIST_HEAD(&dev_ctx->render.busy_list);
+	spin_lock_init(&dev_ctx->render.busy_list_lock);
+	dev_ctx->render.busy_list_count = 0;
+
+	for (i = 0; i < NUM_OF_RENDER_CTX; i++) {
+		render_ctx = &dev_ctx->render.render_ctx[i];
+
+		INIT_LIST_HEAD(&render_ctx->list_entry);
+		render_ctx->dev_ctx = dev_ctx;
+		render_ctx->pending_count = 0;
+
+		list_add_tail(&render_ctx->list_entry,
+			&dev_ctx->render.free_list);
+
+		InterlockedIncrement(&dev_ctx->render.free_list_count);
+	}
+	open_count = InterlockedDecrement(&dev_ctx->open_count);
 	dbg_msg(TRACE_LEVEL_INFO, DBG_PNP, "open_count(%u)", open_count);
+
 	kref_put(&dev_ctx->kref, fl2000_module_free);
 
 	return 0;

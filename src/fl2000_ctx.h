@@ -8,6 +8,8 @@
 #ifndef _FL2000_CTX_H_
 #define _FL2000_CTX_H_
 
+#define	GCC_ATOMIC_SUPPORT	1
+
 /*
  * forward declaration
  */
@@ -189,7 +191,9 @@ struct dev_ctx {
 	 * some compiler (eg. arm-hisiv200-linux-gcc-4.4.1) does not provide
 	 * __sync_xxx_and_fetch. kind of sucks. we use our sync lock here.
 	 */
+#if (!GCC_ATOMIC_SUPPORT)
 	spinlock_t			count_lock;
+#endif
 
 	/*
 	 * bulk out interface
@@ -219,6 +223,7 @@ struct dev_ctx {
 	 */
 	bool				monitor_plugged_in;
 	bool				dev_gone;
+	bool				in_flight_cancelling;
 	uint32_t			card_name;
 
 	bool				hdmi_chip_found;
@@ -242,6 +247,24 @@ struct dev_ctx {
 	 */
 	struct page *			start_page;
 };
+
+#if (GCC_ATOMIC_SUPPORT)
+#define	InterlockedIncrement(x)		__sync_add_and_fetch(x, 1)
+#define	InterlockedDecrement(x)		__sync_sub_and_fetch(x, 1)
+#else
+uint32_t fl2000_interlocked_increment(
+	struct dev_ctx * 	dev_ctx,
+	volatile uint32_t *	target
+	);
+
+uint32_t fl2000_interlocked_decrement(
+	struct dev_ctx * 	dev_ctx,
+	volatile uint32_t *	target
+	);
+
+#define	InterlockedIncrement(x)	fl2000_interlocked_increment(dev_ctx, x)
+#define	InterlockedDecrement(x)	fl2000_interlocked_decrement(dev_ctx, x)
+#endif // GCC_ATOMIC_SUPPORT
 
 #endif // _FL2000_CTX_H_
 

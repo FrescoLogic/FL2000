@@ -23,7 +23,6 @@ fl2000_render_with_busy_list_lock(
 {
 	struct list_head* const	free_list_head = &dev_ctx->render.free_list;
 	int ret_val = 0;
-	unsigned long flags;
 
 	dbg_msg(TRACE_LEVEL_VERBOSE, DBG_RENDER, ">>>>");
 
@@ -37,9 +36,7 @@ fl2000_render_with_busy_list_lock(
 		list_add_tail(&render_ctx->list_entry, free_list_head);
 		spin_unlock_bh(&dev_ctx->render.free_list_lock);
 
-		spin_lock_irqsave(&dev_ctx->count_lock, flags);
-		dev_ctx->render.free_list_count++;
-		spin_unlock_irqrestore(&dev_ctx->count_lock, flags);
+		InterlockedIncrement(&dev_ctx->render.free_list_count);
 		goto exit;
 	}
 
@@ -47,33 +44,26 @@ fl2000_render_with_busy_list_lock(
 	 * put this render_ctx into busy_list
 	 */
 	list_add_tail(&render_ctx->list_entry, &dev_ctx->render.busy_list);
-	spin_lock_irqsave(&dev_ctx->count_lock, flags);
-	dev_ctx->render.busy_list_count++;
-	spin_unlock_irqrestore(&dev_ctx->count_lock, flags);
+	InterlockedIncrement(&dev_ctx->render.busy_list_count);
 
 	fl2000_bulk_prepare_urb(dev_ctx, render_ctx);
-	spin_lock_irqsave(&dev_ctx->count_lock, flags);
-	render_ctx->pending_count++;
-	spin_unlock_irqrestore(&dev_ctx->count_lock, flags);
+	InterlockedIncrement(&render_ctx->pending_count);
+
 	ret_val = usb_submit_urb(render_ctx->main_urb, GFP_ATOMIC);
 	if (ret_val != 0) {
 		dbg_msg(TRACE_LEVEL_ERROR, DBG_PNP,
-			"[ERR] usb_submit_urb(%lx) failed with %d!",
-			(unsigned long) render_ctx->main_urb,
+			"[ERR] usb_submit-urb(%p) failed with %d!",
+			render_ctx->main_urb,
 			ret_val);
 
-		spin_lock_irqsave(&dev_ctx->count_lock, flags);
-		render_ctx->pending_count--;
-		spin_unlock_irqrestore(&dev_ctx->count_lock, flags);
+		InterlockedDecrement(&render_ctx->pending_count);
 
 		/*
 		 * remove this render_ctx from busy_list
 		 */
 		list_del(&render_ctx->list_entry);
 
-		spin_lock_irqsave(&dev_ctx->count_lock, flags);
-		dev_ctx->render.busy_list_count--;
-		spin_unlock_irqrestore(&dev_ctx->count_lock, flags);
+		InterlockedDecrement(&dev_ctx->render.busy_list_count);
 
 		/*
 		 * put the render_ctx into free_list_head
@@ -82,9 +72,7 @@ fl2000_render_with_busy_list_lock(
 		list_add_tail(&render_ctx->list_entry, free_list_head);
 		spin_unlock_bh(&dev_ctx->render.free_list_lock);
 
-		spin_lock_irqsave(&dev_ctx->count_lock, flags);
-		dev_ctx->render.free_list_count++;
-		spin_unlock_irqrestore(&dev_ctx->count_lock, flags);
+		InterlockedIncrement(&dev_ctx->render.free_list_count);
 
 		if (-ENODEV == ret_val || -ENOENT == ret_val) {
 			/*
@@ -97,9 +85,8 @@ fl2000_render_with_busy_list_lock(
 
 	if ((dev_ctx->vr_params.end_of_frame_type == EOF_ZERO_LENGTH) &&
 	    (VR_TRANSFER_PIPE_BULK == dev_ctx->vr_params.trasfer_pipe)) {
-		spin_lock_irqsave(&dev_ctx->count_lock, flags);
-		render_ctx->pending_count++;
-		spin_unlock_irqrestore(&dev_ctx->count_lock, flags);
+		InterlockedIncrement(&render_ctx->pending_count);
+
 		ret_val = usb_submit_urb(render_ctx->zero_length_urb, GFP_ATOMIC);
 		if (ret_val != 0) {
 			dbg_msg(TRACE_LEVEL_ERROR, DBG_PNP,
@@ -110,9 +97,8 @@ fl2000_render_with_busy_list_lock(
 			 * the main_urb is already schedule, we wait until
 			 * the completion to move the render_ctx to free_list
 			 */
-			spin_lock_irqsave(&dev_ctx->count_lock, flags);
-			render_ctx->pending_count--;
-			spin_unlock_irqrestore(&dev_ctx->count_lock, flags);
+			InterlockedDecrement(&render_ctx->pending_count);
+
 			if (-ENODEV == ret_val || -ENOENT == ret_val) {
 				/*
 				 * mark the fl2000 device gone
@@ -128,6 +114,49 @@ exit:
     return ret_val;
 }
 
+/*
+ * bug#12414: on customer's platform, the in-flight URBs get stuck
+ * for some reason. We try to kill in-flight URBs
+ */
+void
+fl2000_kill_in_flight_render_ctx(
+	struct dev_ctx * dev_ctx
+	)
+{
+	struct list_head* const	busy_list = &dev_ctx->render.busy_list;
+	struct render_ctx * render_ctx;
+
+	if (dev_ctx->render.busy_list_count == 0)
+		return;
+
+	dbg_msg(TRACE_LEVEL_INFO, DBG_PNP,
+		"kill in-flight requests now");
+
+	dev_ctx->in_flight_cancelling = 1;
+
+	/*
+	 * for every render_ctx on busy_list, kill and wait for the urb.
+	 */
+	spin_lock_bh(&dev_ctx->render.busy_list_lock);
+	while (!list_empty(busy_list)) {
+		render_ctx = list_first_entry(
+			busy_list, struct render_ctx, list_entry);
+
+		/*
+		 * usb_kill_urb() is synchronous call. no spinlock held!
+		 */
+		spin_unlock_bh(&dev_ctx->render.busy_list_lock);
+		usb_kill_urb(render_ctx->main_urb);
+		usb_kill_urb(render_ctx->zero_length_urb);
+		spin_lock_bh(&dev_ctx->render.busy_list_lock);
+	}
+	spin_unlock_bh(&dev_ctx->render.busy_list_lock);
+
+	dev_ctx->in_flight_cancelling = 0;
+	dbg_msg(TRACE_LEVEL_INFO, DBG_PNP,
+		"all in-flight requests killed");
+}
+
 int
 fl2000_render_ctx_create(
 	struct dev_ctx * dev_ctx
@@ -136,7 +165,6 @@ fl2000_render_ctx_create(
 	struct render_ctx * render_ctx;
 	int		ret_val;
 	uint32_t	i;
-	unsigned long flags;
 
 	ret_val = 0;
 	for (i = 0; i < NUM_OF_RENDER_CTX; i++) {
@@ -165,9 +193,7 @@ fl2000_render_ctx_create(
 		list_add_tail(&render_ctx->list_entry,
 			&dev_ctx->render.free_list);
 
-		spin_lock_irqsave(&dev_ctx->count_lock, flags);
-		dev_ctx->render.free_list_count++;
-		spin_unlock_irqrestore(&dev_ctx->count_lock, flags);
+		InterlockedIncrement(&dev_ctx->render.free_list_count);
 	}
 
 exit:
@@ -181,7 +207,6 @@ fl2000_render_ctx_destroy(
 {
 	struct render_ctx * render_ctx;
 	uint32_t	i;
-	unsigned long flags;
 
 	for (i = 0; i < NUM_OF_RENDER_CTX; i++) {
 		render_ctx = &dev_ctx->render.render_ctx[i];
@@ -203,9 +228,7 @@ fl2000_render_ctx_destroy(
 
 		list_del(&render_ctx->list_entry);
 
-		spin_lock_irqsave(&dev_ctx->count_lock, flags);
-		dev_ctx->render.free_list_count--;
-		spin_unlock_irqrestore(&dev_ctx->count_lock, flags);
+		InterlockedDecrement(&dev_ctx->render.free_list_count);
 	}
 }
 
@@ -269,7 +292,6 @@ void fl2000_render_completion(struct render_ctx * render_ctx)
 {
 	struct dev_ctx * const dev_ctx = render_ctx->dev_ctx;
 	int const urb_status = render_ctx->main_urb->status;
-	unsigned long flags;
 
 	dbg_msg(TRACE_LEVEL_VERBOSE, DBG_RENDER, ">>>>");
 
@@ -282,9 +304,7 @@ void fl2000_render_completion(struct render_ctx * render_ctx)
 	list_del(&render_ctx->list_entry);
 	spin_unlock_bh(&dev_ctx->render.busy_list_lock);
 
-	spin_lock_irqsave(&dev_ctx->count_lock, flags);
-	dev_ctx->render.busy_list_count--;
-	spin_unlock_irqrestore(&dev_ctx->count_lock, flags);
+	InterlockedDecrement(&dev_ctx->render.busy_list_count);
 
 	/*
 	 * put the render_ctx into free_list_head
@@ -293,21 +313,22 @@ void fl2000_render_completion(struct render_ctx * render_ctx)
 	list_add_tail(&render_ctx->list_entry, &dev_ctx->render.free_list);
 	spin_unlock_bh(&dev_ctx->render.free_list_lock);
 
-	spin_lock_irqsave(&dev_ctx->count_lock, flags);
-	dev_ctx->render.free_list_count++;
-	spin_unlock_irqrestore(&dev_ctx->count_lock, flags);
+	InterlockedIncrement(&dev_ctx->render.free_list_count);
 
 	if (urb_status < 0) {
 		dbg_msg(TRACE_LEVEL_ERROR, DBG_PNP,
 			"urb->status(%d) error", urb_status);
 		dev_ctx->render.green_light = 0;
+		dbg_msg(TRACE_LEVEL_ERROR, DBG_PNP, "turning off green_light");
+
 		if (urb_status == -ESHUTDOWN || urb_status == -ENOENT ||
 		    urb_status == -ENODEV) {
 			dbg_msg(TRACE_LEVEL_ERROR, DBG_PNP, "mark device gone");
 			dev_ctx->dev_gone = true;
-		    }
+		}
 		goto exit;
 	}
+
 	fl2000_schedule_next_render(dev_ctx);
 exit:
 	dbg_msg(TRACE_LEVEL_VERBOSE, DBG_RENDER, "<<<<");
@@ -332,9 +353,6 @@ fl2000_primary_surface_update(
 	struct list_head* const	ready_list_head = &dev_ctx->render.ready_list;
 	struct render_ctx *	render_ctx;
 	uint32_t		retry_count = 0;
-	uint32_t		ready_count = 0;
-	uint32_t		free_count = 0;
-	unsigned long flags;
 
 	might_sleep();
 
@@ -357,18 +375,22 @@ retry:
 			free_list_head, struct render_ctx, list_entry);
 		list_del(&render_ctx->list_entry);
 
-		spin_lock_irqsave(&dev_ctx->count_lock, flags);
-		dev_ctx->render.free_list_count--;
-		spin_unlock_irqrestore(&dev_ctx->count_lock, flags);
+		InterlockedDecrement(&dev_ctx->render.free_list_count);
 	}
 	spin_unlock_bh(&dev_ctx->render.free_list_lock);
 
 	if (render_ctx == NULL) {
 		if (retry_count > 3) {
-			dbg_msg(TRACE_LEVEL_WARNING, DBG_RENDER,
-				"no render_ctx?");
+			dbg_msg(TRACE_LEVEL_WARNING, DBG_PNP,
+				"no render_ctx?, render_ctx(%u free, %u busy)",
+				dev_ctx->render.free_list_count,
+				dev_ctx->render.busy_list_count);
 			return;
 		}
+
+		if (retry_count > 1)
+			fl2000_kill_in_flight_render_ctx(dev_ctx);
+
 		retry_count++;
 		msleep_interruptible(10);
 		goto retry;
@@ -382,15 +404,15 @@ retry:
 	spin_lock_bh(&dev_ctx->render.ready_list_lock);
 	list_add_tail(&render_ctx->list_entry, ready_list_head);
 
-	spin_lock_irqsave(&dev_ctx->count_lock, flags);
-	ready_count = ++dev_ctx->render.ready_list_count;
-	spin_unlock_irqrestore(&dev_ctx->count_lock, flags);
+	InterlockedIncrement(&dev_ctx->render.ready_list_count);
 
 	spin_unlock_bh(&dev_ctx->render.ready_list_lock);
 
 	dbg_msg(TRACE_LEVEL_WARNING, DBG_RENDER,
 		"render_ctx(%p) scheduled, free_count(%u)/ready_count(%u)",
-		render_ctx, free_count, ready_count);
+		render_ctx,
+		dev_ctx->render.free_list_count,
+		dev_ctx->render.ready_list_count);
 
 	/*
 	 * schedule render context from ready_list
@@ -412,8 +434,6 @@ fl2000_schedule_next_render(struct dev_ctx * dev_ctx)
 	struct list_head* const	ready_list_head = &dev_ctx->render.ready_list;
 	struct list_head	staging_list;
 	struct render_ctx *	render_ctx = NULL;
-	uint32_t		ready_count = 0;
-	unsigned long		flags;
 	int			ret_val;
 
 	if (dev_ctx->render.green_light == 0) {
@@ -431,12 +451,9 @@ fl2000_schedule_next_render(struct dev_ctx * dev_ctx)
 		render_ctx = list_first_entry(
 			ready_list_head, struct render_ctx, list_entry);
 		list_del(&render_ctx->list_entry);
-		spin_lock_irqsave(&dev_ctx->count_lock, flags);
-		ready_count = --dev_ctx->render.ready_list_count;
-		spin_unlock_irqrestore(&dev_ctx->count_lock, flags);
+		InterlockedDecrement(&dev_ctx->render.ready_list_count);
 		list_add_tail(&render_ctx->list_entry, &staging_list);
 	}
-	ASSERT(ready_count == 0);
 	spin_unlock_bh(&dev_ctx->render.ready_list_lock);
 
 	/*
@@ -472,9 +489,7 @@ reschedule:
 				free_list_head, struct render_ctx, list_entry);
 			list_del(&render_ctx->list_entry);
 
-			spin_lock_irqsave(&dev_ctx->count_lock, flags);
-			dev_ctx->render.free_list_count--;
-			spin_unlock_irqrestore(&dev_ctx->count_lock, flags);
+			InterlockedDecrement(&dev_ctx->render.free_list_count);
 		}
 		spin_unlock_bh(&dev_ctx->render.free_list_lock);
 
@@ -509,13 +524,12 @@ void fl2000_render_stop(struct dev_ctx * dev_ctx)
 	dbg_msg(TRACE_LEVEL_INFO, DBG_PNP,
 		"busy_list_count(%u)", dev_ctx->render.busy_list_count);
 
+	fl2000_kill_in_flight_render_ctx(dev_ctx);
 	while (dev_ctx->render.busy_list_count != 0) {
 		delay_ms += 10;
 		DELAY_MS(10);
 	}
-	dbg_msg(TRACE_LEVEL_INFO, DBG_PNP,
-		"waited %u ms", delay_ms);
-
+	dbg_msg(TRACE_LEVEL_INFO, DBG_PNP, "waited %u ms", delay_ms);
 }
 
 // eof: fl2000_render.c
