@@ -68,18 +68,27 @@ fl2000_dev_select_interface(struct dev_ctx * dev_ctx)
 	ASSERT( alt );
 
 	/*
-	 * started from kernel 5.x.x, the USB core is picky on the buggy fl2000 descriptors
-	 * where the fl2000 descriptor reports redudant endpoints in the interface[0,1,2] group.
-	 * this descritor bug causes the usb core to ignore the redundant endpoints
-	 * in interface[1,2]. Therefore the endpoints are ignored. As a workaround,
-	 * we select interface 0, alternate setting 1 where the bulk endpoints are recognized
+	 * started from kernel 5.x.x, the USB core is picky on the buggy fl2000
+	 * descriptors where the fl2000 descriptor reports redudant endpoints
+	 * in the interface[0,1,2] group. this descritor bug causes the usb core
+	 * to ignore the redundant endpoints in interface[1,2]. Therefore the
+	 * endpoints are ignored. As a workaround, we select interface 0,
+	 * alternate setting 1 where the bulk endpoints are recognized
 	 * by the core.
 	 */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,0,0)
+	ret_val = usb_set_interface(
+		dev_ctx->usb_dev,
+		alt->desc.bInterfaceNumber,
+		alt->desc.bAlternateSetting
+		);
+#else
 	ret_val = usb_set_interface(
 		dev_ctx->usb_dev,
 		0,	//alt->desc.bInterfaceNumber,
 		1	//alt->desc.bAlternateSetting
 		);
+#endif
 	if (0 != ret_val) {
 		dbg_msg(TRACE_LEVEL_ERROR, DBG_PNP,
 		"ERROR usb_set_interface failed ret_val=%d",
