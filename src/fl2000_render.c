@@ -226,7 +226,7 @@ fl2000_render_ctx_destroy(
 			render_ctx->zero_length_urb = NULL;
 		}
 
-		list_del(&render_ctx->list_entry);
+		INIT_LIST_HEAD(&render_ctx->list_entry);
 
 		InterlockedDecrement(&dev_ctx->render.free_list_count);
 	}

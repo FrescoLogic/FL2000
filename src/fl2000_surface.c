@@ -495,6 +495,13 @@ void fl2000_surface_destroy_all(struct dev_ctx * dev_ctx)
 	struct primary_surface* surface;
 	struct list_head * list_head = &dev_ctx->render.surface_list;
 
+	/*
+	 * in case list_head is not yet initialized because of a failure in
+	 * fl2000_dev_init(), skip the access of list_head
+	 */
+	if (dev_ctx->render.surface_list_count == 0)
+		return;
+
 	spin_lock_bh(&dev_ctx->render.surface_list_lock);
 	while (!list_empty(list_head)) {
 		surface = list_first_entry(
