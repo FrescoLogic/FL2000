@@ -11,6 +11,7 @@
 
 #include <termios.h>
 #include <unistd.h>
+#include <pthread.h>
 #include "../include/fl2000_ioctl.h"
 
 #define	FL2K_NAME	"/dev/fl2000-0"
@@ -509,6 +510,57 @@ bool fl2000_is_connected(void)
 	return false;
 }
 
+uint32_t	current_width;
+uint32_t	current_height;
+void * monitor_connection_worker(void *arg)
+{
+	int	fd = (intptr_t) arg;
+	int	old_state;
+	int	old_type;
+	struct	monitor_info	monitor_info;
+	struct	display_mode 	display_mode;
+	int	ret_val = 0;
+
+	ret_val = pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, &old_state);
+	if (ret_val)
+		fprintf(stderr, "pthread_setcancelstate failed?\n");
+
+	ret_val = pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, &old_type);
+	if (ret_val)
+		fprintf(stderr, "pthread_setcanceltype failed?\n");
+
+	while(true) {
+		memset(&monitor_info, 0, sizeof(monitor_info));
+		ioctl(fd, IOCTL_FL2000_WAIT_FOR_MONITOR_EVENT, &monitor_info);
+		if (monitor_info.monitor_flags.connected) {
+			fprintf(stderr, "monitor connected! set resolution(%u, %u)\n",
+				current_width, current_height
+				);
+
+			memset(&display_mode, 0, sizeof(display_mode));
+			display_mode.width = current_width;
+			display_mode.height = current_height;
+			display_mode.refresh_rate = 60;
+			display_mode.input_color_format = COLOR_FORMAT_RGB_24;
+			display_mode.output_color_format = OUTPUT_COLOR_FORMAT;
+			display_mode.use_compression = USE_COMPRESSION;
+			display_mode.compress_size_limit = COMPRESS_SIZE_LIMIT;
+
+			ret_val = ioctl(fd, IOCTL_FL2000_SET_DISPLAY_MODE, &display_mode);
+			if (ret_val < 0) {
+				fprintf(stderr, "IOCTL_FL2000_SET_DISPLAY_MODE failed %d\n",
+					ret_val);
+			}
+		}
+		else {
+			fprintf(stderr, "monitor disconnected! current resolution(%u, %u)\n",
+				current_width, current_height
+				);
+		}
+	}
+	return NULL;	// nothing to return
+}
+
 void test_display_on_resolution(int fd, uint32_t width, uint32_t height)
 {
 	struct display_mode display_mode;
@@ -519,6 +571,7 @@ void test_display_on_resolution(int fd, uint32_t width, uint32_t height)
 	int index;
 	bool bmp_ok;
 	unsigned int num_bmp;
+	pthread_t monitor_thread;
 
 	/*
 	 * find how many bmp files are available, look for at most
@@ -622,6 +675,14 @@ void test_display_on_resolution(int fd, uint32_t width, uint32_t height)
 		}
 	}
 
+	current_width = width;
+	current_height = height;
+	ret_val = pthread_create(&monitor_thread, NULL, monitor_connection_worker, (void*) ((intptr_t) fd));
+	if (ret_val != 0) {
+		fprintf(stderr, "pthread_create failed!\n");
+		goto exit;
+	}
+
 	/*
 	 * for each primary surfaces, send update to kernel driver.
 	 */
@@ -675,6 +736,12 @@ void test_display_on_resolution(int fd, uint32_t width, uint32_t height)
 		if (c == 27)
 			break;
 	} while (true);
+
+	/*
+	 * kill monitor_connection_worker, and wait for monitor_thread to die.
+	 */
+	pthread_cancel(monitor_thread);
+	pthread_join(monitor_thread, NULL);	// expect nothing from the thread
 
 	/*
 	 * disable output
