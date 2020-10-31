@@ -13,8 +13,24 @@
 #include <unistd.h>
 #include <pthread.h>
 #include "../include/fl2000_ioctl.h"
+#include "screencapture.h"
 
 #define	FL2K_NAME	"/dev/fl2000-0"
+
+/*
+ * definitions
+ */
+#define IMAGE_ASPECT_RATIO_16_10                0
+#define IMAGE_ASPECT_RATIO_4_3                  1
+#define IMAGE_ASPECT_RATIO_5_4                  2
+#define IMAGE_ASPECT_RATIO_16_9                 3
+
+#define MAX_FRAME_BUFFER_SIZE			1920*1080*3
+#define	NUM_FRAME_BUFFERS			16
+
+#define	USE_COMPRESSION				0
+#define	COMPRESS_SIZE_LIMIT			0	// no limit on the compress size
+//#define	COMPRESS_SIZE_LIMIT			1666666		// for xHC that can do 100MB/s, the driver compress each frame to size no larger than  (100*1000*1000/60) bytes
 
 /*
  * definitions
@@ -284,9 +300,8 @@ bool init_frame_by_bmp_file(
 		goto exit;
 	}
 
-	/*
-	 * check header
-	 */
+	 // check header
+
 	if (header[0] != 'B' || header[1] != 'M' || header[10] != 0x36 ||
 	    header[14] != 0x28) {
 		fprintf(stderr, "invalid header\n");
@@ -717,6 +732,10 @@ void test_display_on_resolution(int fd, uint32_t width, uint32_t height)
 		}
 		update_info.buffer_length 	= width * height * 3;
 
+		//ici que sa ce passe
+		//init_frame_by_bmp_file(frame_buffer,width,height,0);
+		getScreenPixels(frame_buffer,width,height);
+
 		ret_val = ioctl(fd, IOCTL_FL2000_NOTIFY_SURFACE_UPDATE, &update_info);
 		if (ret_val < 0) {
 			fprintf(stderr, "IOCTL_FL2000_NOTIFY_SURFACE_UPDATE failed %d\n",
@@ -784,6 +803,7 @@ void test_display_on_resolution(int fd, uint32_t width, uint32_t height)
 				ret_val);
 			goto exit;
 		}
+
 	}
 
 exit:;
