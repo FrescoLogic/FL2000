@@ -15,10 +15,14 @@ mainstream kernel. You might need to adapt it for your own use.
 
 This release is targeted to open-source developers, as opposed to end-users.
 
-### 4. How do I enable extended desktop/mirrored desktop on my X Window?
+### 4. How do I enable extended desktop on my X Window?
 
 Currently Fresco Logic does not provide desktop related manipulation.
 Fresco Logic hopes the community will contribute to this area so that end-users can easily adopt this solution.
+
+### 4.5 How do I enable mirrored desktop on my X Window?
+
+The sample directory contains sample code wich mirror your screen but it's heavly in developement and isn't based on a drv driver
 
 ### 5. FL2000DX limitation.
 

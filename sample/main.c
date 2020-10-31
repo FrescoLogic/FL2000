@@ -261,85 +261,6 @@ void init_frame_by_test_pattern(
 	}
 }
 
-/*
- * return true if a test_%u_%u.bmp exist, and is 24bpp format.
- */
-bool init_frame_by_bmp_file(
-	uint8_t * frame_buffer,
-	uint32_t width,
-	uint32_t height,
-	uint32_t index)
-{
-	uint32_t const frame_size = width * height * 3;
-	char file_name[128];
-	uint8_t header[54];
-	size_t len;
-	bool file_ok = false;
-	FILE * bmp_file;
-	uint32_t bmp_width;
-	uint32_t bmp_height;
-	uint32_t bmp_bpp;
-	uint32_t i;
-
-	memset(file_name, 0, sizeof(file_name));
-	snprintf(file_name, sizeof(file_name), "test_%d_%d_%d.bmp",
-		width, height, index);
-	bmp_file = fopen(file_name, "r");
-	if (bmp_file == NULL) {
-		//fprintf(stderr, "%s not exists\n", file_name);
-		goto exit;
-	}
-
-	/*
-	 * read the header
-	 */
-	len = fread(header, 1, 54, bmp_file);
-	if (len != 54) {
-		fprintf(stderr, "%s len(%d) != 54 ?\n",
-			file_name, (int) len);
-		goto exit;
-	}
-
-	 // check header
-
-	if (header[0] != 'B' || header[1] != 'M' || header[10] != 0x36 ||
-	    header[14] != 0x28) {
-		fprintf(stderr, "invalid header\n");
-		goto exit;
-	}
-
-	bmp_width  = header[20] << 16 | header[19] << 8 | header[18];
-	bmp_height = header[24] << 16 | header[23] << 8 | header[22];
-	if (bmp_width != width || bmp_height != height) {
-		fprintf(stderr, "bmp width/height (%u,%u) mismatch!\n",
-			bmp_width, bmp_height);
-		goto exit;
-	}
-
-	bmp_bpp = header[28];
-	if (bmp_bpp != 24) {
-		fprintf(stderr, "bmp_bpp(%d) not 24?\n", bmp_bpp);
-		goto exit;
-	}
-
-	/*
-	 * read the frame buffer from offset 54, in reverse order.
-	 */
-	for (i = 0; i < height; i++) {
-		uint8_t * frame_offset;
-
-		frame_offset = frame_buffer + (height - i - 1) * width * 3;
-		fread(frame_offset, 1, width * 3,  bmp_file);
-	}
-
-	file_ok = true;
-
-exit:
-	if (bmp_file != NULL)
-		fclose(bmp_file);
-	return file_ok;
-}
-
 int _alloc_frame(int fd, struct test_alloc * phy_alloc, uint32_t size)
 {
 	int ret;
@@ -417,9 +338,6 @@ void test_display(int fd, uint32_t width, uint32_t height, uint32_t index)
 		surface_info.user_buffer = phy_frame_buffers[0].phy_addr;
 		break;
 	}
-
-	if (!init_frame_by_bmp_file(frame_buffer, width, height, index))
-		init_frame_by_test_pattern(frame_buffer, width, height);
 
 	surface_info.buffer_length	= width * height * 3;
 	surface_info.width		= width;
@@ -584,29 +502,7 @@ void test_display_on_resolution(int fd, uint32_t width, uint32_t height)
 	uint8_t * frame_buffer;
 	int ret_val;
 	int index;
-	bool bmp_ok;
-	unsigned int num_bmp;
 	pthread_t monitor_thread;
-
-	/*
-	 * find how many bmp files are available, look for at most
-	 * 16 test_xxxx_yyyy_z.bmp
-	 */
-	num_bmp = 0;
-	for (index = 0; index < NUM_FRAME_BUFFERS; index++) {
-		char file_name[128];
-		FILE * bmp_file;
-
-		memset(file_name, 0, sizeof(file_name));
-		snprintf(file_name, sizeof(file_name), "test_%d_%d_%d.bmp",
-			width, height, index);
-		bmp_file = fopen(file_name, "r");
-		if (bmp_file == NULL)
-			break;
-		fclose(bmp_file);
-		num_bmp++;
-	}
-
 
 	/*
 	 * set display mode
@@ -631,65 +527,61 @@ void test_display_on_resolution(int fd, uint32_t width, uint32_t height)
 	/*
 	 * create surfaces
 	 */
-	for (index = 0; index < num_bmp; index++) {
-		memset(&surface_info, 0, sizeof(surface_info));
+	memset(&surface_info, 0, sizeof(surface_info));
 
-		switch (mem_type) {
-		case SURFACE_TYPE_VIRTUAL_FRAGMENTED_VOLATILE:
-		case SURFACE_TYPE_VIRTUAL_FRAGMENTED_PERSISTENT:
-			frame_buffer = frame_buffers[index];
-			init_frame_by_bmp_file(frame_buffer, width, height, index);
-			surface_info.handle		= (unsigned long) frame_buffer;
-			surface_info.user_buffer	= (unsigned long) frame_buffer;
-			break;
-
-		case SURFACE_TYPE_VIRTUAL_CONTIGUOUS:
-			ret_val = _alloc_frame(fd, &phy_frame_buffers[index],
-				width * height * 3);
-			if (ret_val < 0)
-				goto exit;
-
-			fprintf(stderr,
-				"usr_addr(0x%lx), phy_addr(0x%lx) allocated\n",
-				(unsigned long) phy_frame_buffers[index].usr_addr,
-				(unsigned long) phy_frame_buffers[index].phy_addr);
-			frame_buffer = (uint8_t*) (unsigned long) phy_frame_buffers[index].usr_addr;
-			init_frame_by_bmp_file(frame_buffer, width, height, index);
-			surface_info.handle	 = phy_frame_buffers[index].usr_addr;
-			surface_info.user_buffer = phy_frame_buffers[index].usr_addr;
-			break;
-		case SURFACE_TYPE_PHYSICAL_CONTIGUOUS:
-			ret_val = _alloc_frame(fd, &phy_frame_buffers[index],
-				width * height * 3);
-			if (ret_val < 0)
-				goto exit;
-
-			fprintf(stderr,
-				"usr_addr(0x%lx), phy_addr(0x%lx) allocated\n",
-				(unsigned long) phy_frame_buffers[index].usr_addr,
-				(unsigned long) phy_frame_buffers[index].phy_addr);
-			frame_buffer = (uint8_t*) (unsigned long) phy_frame_buffers[index].usr_addr;
-			init_frame_by_bmp_file(frame_buffer, width, height, index);
-			surface_info.handle	 = phy_frame_buffers[index].usr_addr;
-			surface_info.user_buffer = phy_frame_buffers[index].phy_addr;
-			break;
-		}
-
-		surface_info.buffer_length	= width * height * 3;
-		surface_info.width		= width;
-		surface_info.height		= height;
-		surface_info.pitch		= width * 3;
-		surface_info.color_format	= COLOR_FORMAT_RGB_24;
-		surface_info.type		= mem_type;
-
-		ret_val = ioctl(fd, IOCTL_FL2000_CREATE_SURFACE, &surface_info);
-		if (ret_val < 0) {
-			fprintf(stderr, "IOCTL_FL2000_CREATE_SURFACE failed %d\n",
-				ret_val);
+	switch (mem_type) {
+	case SURFACE_TYPE_VIRTUAL_FRAGMENTED_VOLATILE:
+	case SURFACE_TYPE_VIRTUAL_FRAGMENTED_PERSISTENT:
+		frame_buffer = frame_buffers[index];
+		getScreenPixels(frame_buffer,width,height);
+		surface_info.handle		= (unsigned long) frame_buffer;
+		surface_info.user_buffer	= (unsigned long) frame_buffer;
+		break;
+	case SURFACE_TYPE_VIRTUAL_CONTIGUOUS:
+		ret_val = _alloc_frame(fd, &phy_frame_buffers[index],
+		width * height * 3);
+		if (ret_val < 0)
 			goto exit;
-		}
+
+		fprintf(stderr,
+			"usr_addr(0x%lx), phy_addr(0x%lx) allocated\n",
+			(unsigned long) phy_frame_buffers[index].usr_addr,
+			(unsigned long) phy_frame_buffers[index].phy_addr);
+		frame_buffer = (uint8_t*) (unsigned long) phy_frame_buffers[index].usr_addr;
+		getScreenPixels(frame_buffer,width,height);
+		surface_info.handle	 = phy_frame_buffers[index].usr_addr;
+		surface_info.user_buffer = phy_frame_buffers[index].usr_addr;
+		break;
+	case SURFACE_TYPE_PHYSICAL_CONTIGUOUS:
+		ret_val = _alloc_frame(fd, &phy_frame_buffers[index],
+			width * height * 3);
+		if (ret_val < 0)
+			goto exit;
+		fprintf(stderr,
+			"usr_addr(0x%lx), phy_addr(0x%lx) allocated\n",
+			(unsigned long) phy_frame_buffers[index].usr_addr,
+			(unsigned long) phy_frame_buffers[index].phy_addr);
+		frame_buffer = (uint8_t*) (unsigned long) phy_frame_buffers[index].usr_addr;
+		getScreenPixels(frame_buffer,width,height);
+		surface_info.handle	 = phy_frame_buffers[index].usr_addr;
+		surface_info.user_buffer = phy_frame_buffers[index].phy_addr;
+		break;
 	}
 
+	surface_info.buffer_length	= width * height * 3;
+	surface_info.width		= width;
+	surface_info.height		= height;
+	surface_info.pitch		= width * 3;
+	surface_info.color_format	= COLOR_FORMAT_RGB_24;
+	surface_info.type		= mem_type;
+
+	ret_val = ioctl(fd, IOCTL_FL2000_CREATE_SURFACE, &surface_info);
+	if (ret_val < 0) {
+		fprintf(stderr, "IOCTL_FL2000_CREATE_SURFACE failed %d\n",
+			ret_val);
+		goto exit;
+	}
+	
 	current_width = width;
 	current_height = height;
 	ret_val = pthread_create(&monitor_thread, NULL, monitor_connection_worker, (void*) ((intptr_t) fd));
@@ -701,7 +593,6 @@ void test_display_on_resolution(int fd, uint32_t width, uint32_t height)
 	/*
 	 * for each primary surfaces, send update to kernel driver.
 	 */
-	index = 0;
 	do {
 		int c;
 
@@ -743,8 +634,6 @@ void test_display_on_resolution(int fd, uint32_t width, uint32_t height)
 			goto exit;
 		}
 
-		if (++index >= num_bmp)
-			index = 0;
 
 		if (kbhit() == 0) {
 			usleep(1000*10);	// sleep for 10 ms
@@ -771,39 +660,36 @@ void test_display_on_resolution(int fd, uint32_t width, uint32_t height)
 	/*
 	 * destroy all surfaces
 	 */
-	for (index = 0; index < num_bmp; index++) {
-		frame_buffer = frame_buffers[index];
-		memset(&surface_info, 0, sizeof(surface_info));
-		switch (mem_type) {
-		case SURFACE_TYPE_VIRTUAL_FRAGMENTED_VOLATILE:
-		case SURFACE_TYPE_VIRTUAL_FRAGMENTED_PERSISTENT:
-			surface_info.handle		= (unsigned long) frame_buffer;
-			surface_info.user_buffer	= (unsigned long) frame_buffer;
-			break;
-		case SURFACE_TYPE_VIRTUAL_CONTIGUOUS:
-			_release_frame(fd, &phy_frame_buffers[index]);
-			surface_info.handle		= phy_frame_buffers[index].usr_addr;
-			surface_info.user_buffer	= phy_frame_buffers[index].usr_addr;
-			break;
-		case SURFACE_TYPE_PHYSICAL_CONTIGUOUS:
-			_release_frame(fd, &phy_frame_buffers[index]);
-			surface_info.handle		= phy_frame_buffers[index].usr_addr;
-			surface_info.user_buffer	= phy_frame_buffers[index].phy_addr;
-			break;
-		}
-		surface_info.buffer_length	= width * height * 3;
-		surface_info.width		= width;
-		surface_info.height		= height;
-		surface_info.pitch		= width * 3;
-		surface_info.color_format	= COLOR_FORMAT_RGB_24;
-		surface_info.type		= mem_type;
-		ret_val = ioctl(fd, IOCTL_FL2000_DESTROY_SURFACE, &surface_info);
-		if (ret_val < 0) {
-			fprintf(stderr, "IOCTL_FL2000_DESTROY_SURFACE failed %d\n",
-				ret_val);
-			goto exit;
-		}
-
+	frame_buffer = frame_buffers[index];
+	memset(&surface_info, 0, sizeof(surface_info));
+	switch (mem_type) {
+	case SURFACE_TYPE_VIRTUAL_FRAGMENTED_VOLATILE:
+	case SURFACE_TYPE_VIRTUAL_FRAGMENTED_PERSISTENT:
+		surface_info.handle		= (unsigned long) frame_buffer;
+		surface_info.user_buffer	= (unsigned long) frame_buffer;
+		break;
+	case SURFACE_TYPE_VIRTUAL_CONTIGUOUS:
+		_release_frame(fd, &phy_frame_buffers[index]);
+		surface_info.handle		= phy_frame_buffers[index].usr_addr;
+		surface_info.user_buffer	= phy_frame_buffers[index].usr_addr;
+		break;
+	case SURFACE_TYPE_PHYSICAL_CONTIGUOUS:
+		_release_frame(fd, &phy_frame_buffers[index]);
+		surface_info.handle		= phy_frame_buffers[index].usr_addr;
+		surface_info.user_buffer	= phy_frame_buffers[index].phy_addr;
+		break;
+	}
+	surface_info.buffer_length	= width * height * 3;
+	surface_info.width		= width;
+	surface_info.height		= height;
+	surface_info.pitch		= width * 3;
+	surface_info.color_format	= COLOR_FORMAT_RGB_24;
+	surface_info.type		= mem_type;
+	ret_val = ioctl(fd, IOCTL_FL2000_DESTROY_SURFACE, &surface_info);
+	if (ret_val < 0) {
+		fprintf(stderr, "IOCTL_FL2000_DESTROY_SURFACE failed %d\n",
+			ret_val);
+		goto exit;
 	}
 
 exit:;
