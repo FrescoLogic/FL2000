@@ -8,6 +8,8 @@
 #ifndef _VID_I2C_H_
 #define _VID_I2C_H_
 
+#include <asm/byteorder.h>
+
 #define I2C_ADDRESS_HDMI                        ( 0x4C )
 #define I2C_ADDRESS_DSUB                        ( 0x50 )
 #define I2C_ADDRESS_EEPROM                      ( 0x54 )
@@ -27,6 +29,19 @@ typedef union _I2C_DATA_
 {
     struct
     {
+#ifdef __BIG_ENDIAN
+	// Big endian host; most significant bit declared first
+	u32 OpStatus:1;        // I2C operation status.  0=in progress, 1=done.  SW shall not perform the next I2C operation when this bit is 0.  SW shall write 0 to clear this bit to start the next i2C
+	u32 Resv2:3;
+	u32 DataStatus:4;      // I2C status indicating passed/failed per byte. 0=passed, 1=failed
+	u32 Resv1:6;
+	u32 SpiEraseEnable:1;  // 1=SPI, 0=EEPROM.
+	u32 IsSpiOperation:1;  // 1=SPI, 0=EEPROM.
+	u32 offset:8;          // I2C offset.  Bit 9:8 shall be written 0.
+	u32 RW:1;              // 1=I2C read, 0=I2C write
+	u32 Addr:7;            // I2C address
+#else
+	// Little endian host; least significant bit declared first
 	u32 Addr:7;            // I2C address
 	u32 RW:1;              // 1=I2C read, 0=I2C write
 	u32 offset:8;          // I2C offset.  Bit 9:8 shall be written 0.
@@ -36,6 +51,7 @@ typedef union _I2C_DATA_
 	u32 DataStatus:4;      // I2C status indicating passed/failed per byte. 0=passed, 1=failed
 	u32 Resv2:3;
 	u32 OpStatus:1;        // I2C operation status.  0=in progress, 1=done.  SW shall not perform the next I2C operation when this bit is 0.  SW shall write 0 to clear this bit to start the next i2C
+#endif
     } s;
 
     u32 value;

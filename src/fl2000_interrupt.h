@@ -8,9 +8,38 @@
 #ifndef _FL2000_INTERRUPT_H_
 #define _FL2000_INTERRUPT_H_
 
+#include <asm/byteorder.h>
+
 struct vga_status {
 	union {
 	struct  {
+#ifdef __BIG_ENDIAN
+	// Big endian host; most significant bit declared first
+        uint32_t edid_connect_changed:1;
+        uint32_t ext_mon_connect_changed:1;
+        uint32_t ext_mon_connected:1;
+        uint32_t edid_connected:1;
+        uint32_t hdmi_enabled:1;
+        uint32_t hdmi_connection_changed:1;
+        uint32_t frame_count:16;
+        uint32_t line_buffer_overflow:1;
+        uint32_t line_buffer_underflow:1;
+        uint32_t dac_powered_up:1;
+        uint32_t pll_powered_up:1;
+        uint32_t intr_pending:1;
+
+        // Change status due to feedback algorithm has detected a drop of TD.
+        //
+        uint32_t feedback_dropped:1;
+
+	// Change status due to ISO ACK received and a feedback return packet has been sent to ISO Interrupt IN EP.
+	//
+	uint32_t isoch_ack_changed:1;
+	uint32_t line_buffer_halted:1;
+	uint32_t frame_dropped:1;
+	uint32_t connected:1;
+#else
+	// Little endian host; least significant bit declared first
 	uint32_t connected:1;
 	uint32_t frame_dropped:1;
 	uint32_t line_buffer_halted:1;
@@ -34,6 +63,7 @@ struct vga_status {
         uint32_t ext_mon_connected:1;
         uint32_t ext_mon_connect_changed:1;
         uint32_t edid_connect_changed:1;
+#endif
 	};
 
 	uint32_t value;
