@@ -85,7 +85,8 @@ fl2000_device_probe(
 	config = usb_dev->actconfig;
 	for (index = 0; index < USB_MAXINTERFACES; index ++) {
 		other_ifc = config->interface[index];
-		if (other_ifc && other_ifc != ifc) {
+		if (other_ifc && other_ifc != ifc &&
+		    to_usb_driver(other_ifc->dev.driver) == &fl2000_driver) {
 			dev_ctx = usb_get_intfdata(other_ifc);
 			if (dev_ctx)
 				break;
