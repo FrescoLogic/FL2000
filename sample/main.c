@@ -727,9 +727,8 @@ void test_display_on_resolution(int fd, uint32_t width, uint32_t height)
 		if (++index >= num_bmp)
 			index = 0;
 
-		if (kbhit() == 0) {
+		while (kbhit() == 0) {
 			usleep(1000*10);	// sleep for 10 ms
-			continue;
 		}
 
 		c = getchar();
