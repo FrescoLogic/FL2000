@@ -25,7 +25,7 @@ fl2000_i2c_xfer(
 
 	dbg_msg(TRACE_LEVEL_VERBOSE, DBG_HW, ">>>>");
 
-	dev_ctx->ctrl_xfer_buf = *data;
+	dev_ctx->ctrl_xfer_buf = cpu_to_le32(*data);
 
 	if (is_read) {
 		bRequest = REQUEST_I2C_COMMAND_READ;
@@ -51,7 +51,7 @@ fl2000_i2c_xfer(
 		CTRL_XFER_TIMEOUT);
 
 	if (is_read)
-		*data = dev_ctx->ctrl_xfer_buf;
+		*data = le32_to_cpu(dev_ctx->ctrl_xfer_buf);
 
 	return ret_val;
 }
